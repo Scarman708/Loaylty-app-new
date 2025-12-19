@@ -1,0 +1,20 @@
+.loyalty-widget {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--lw-radius, 14px);
+  color: var(--lw-fg, #111);
+  background: var(--lw-bg, #f6f7f9);
+  text-align: var(--lw-align, left);
+  box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.loyalty-widget__heading { margin: 0 0 6px 0; font-weight: 600; line-height: 1.2; }
+.loyalty-widget__subtext { margin: 0; opacity: .8; line-height: 1.5; }
+.loyalty-widget__row { display: inline-flex; align-items: center; gap: 8px; }
+.loyalty-widget__badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: 999px; font-size: .9rem;
+  background: rgba(0,0,0,.06);
+}
+.loyalty-widget--inline { padding: 0; background: transparent; box-shadow: none; }
+.loyalty-widget--badge  { padding: 0; background: transparent; box-shadow: none; }

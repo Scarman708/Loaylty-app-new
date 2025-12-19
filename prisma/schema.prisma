@@ -1,0 +1,441 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+enum ProgramStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum RoundingMode {
+  down
+  nearest
+  up
+}
+
+enum EarnHoldEvent {
+  NONE // points available immediately
+  PAID // available when order is paid
+  FULFILLED // available when order is fulfilled
+}
+
+enum ExpiryType {
+  NONE
+  ROLLING // expires N days after availability
+  FIXED_DATE // expires at a fixed date
+}
+
+enum EarningRuleType {
+  ORDER // base order earning (rate/multiplier)
+  PRODUCT_TAG // earn on products with specific tags
+  COLLECTION // earn on products within a collection
+  SIGNUP // one-time welcome points
+  BIRTHDAY // birthday award
+  REFERRAL // referral events
+  REVIEW // product review completion
+  CUSTOM_EVENT // app-defined events
+}
+
+enum RedemptionRuleType {
+  CART_DISCOUNT // apply discount to cart
+  PRODUCT_DISCOUNT // discount on specific product(s)
+  FREE_SHIPPING
+  FIXED_VOUCHER // generate code worth a fixed discount
+  CUSTOM_AWARD // e.g., gift, manual fulfillment
+}
+
+enum LedgerReason {
+  EARN
+  REDEEM
+  ADJUST
+  EXPIRE
+  REVOKE
+  REFUND_REVERSAL
+  ORDER_CANCELLED
+}
+
+enum LedgerSource {
+  ORDER
+  ADMIN
+  REFERRAL
+  REVIEW
+  BIRTHDAY
+  SIGNUP
+  MANUAL
+  API
+  SYSTEM
+}
+
+enum LedgerStatus {
+  PENDING // waiting for hold event (e.g., PAID/FULFILLED)
+  AVAILABLE // can be spent
+  EXPIRED
+  REVOKED
+}
+
+enum TierWindowType {
+  LIFETIME
+  ROLLING_WINDOW_DAYS
+}
+
+enum PeriodUnit {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum GoalType {
+  SUBTOTAL
+  POINTS
+}
+
+// -----------------------------------------------------------------------------
+// CORE ENTITIES
+// -----------------------------------------------------------------------------
+model Shop {
+  id            Int           @id @default(autoincrement())
+  shopDomain    String        @unique // e.g., my-shop.myshopify.com
+  shopId        BigInt? // Shopify numeric ID (optional)
+  accessToken   String? // Admin API token (encrypted at rest in production)
+  currencyCode  String? // e.g., USD, INR
+  installedAt   DateTime?     @default(now())
+  uninstalledAt DateTime?
+  status        ProgramStatus @default(ACTIVE)
+
+  // Relations
+  program         ProgramSettings?
+  expiryPolicy    ExpiryPolicy?
+  earningRules    EarningRule[]
+  redemptionRules RedemptionRule[]
+  tiers           Tier[]
+  customers       Customer[]
+  ledgers         PointLedger[]
+  redemptions     RewardRedemption[]
+  snapshots       BalanceSnapshot[]
+  goals           GoalConfig?
+  webhooks        WebhookLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model ProgramSettings {
+  id     Int  @id @default(autoincrement())
+  shopId Int  @unique
+  shop   Shop @relation(fields: [shopId], references: [id])
+
+  // Global earning rule
+  pointsPerCurrency Int           @default(10) // points per 1 major unit of currency
+  rounding          RoundingMode  @default(nearest)
+  excludeDiscounts  Boolean       @default(false) // if true, use subtotal before discounts
+  earnOnShipping    Boolean       @default(false)
+  earnOnTaxes       Boolean       @default(false)
+  holdEvent         EarnHoldEvent @default(PAID) // when points become AVAILABLE
+  // Minimum order subtotal (cents) to earn
+  minSubtotalCents  Int           @default(0)
+
+  // Caps/limits
+  maxPointsPerOrder Int? // optional cap per order
+  dailyEarnCap      Int? // optional per-customer/day
+  monthlyEarnCap    Int?
+
+  // Referrals
+  referralsEnabled Boolean @default(false)
+  referrerBonus    Int? // points
+  refereeBonus     Int? // points
+
+  // Status
+  status ProgramStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ExpiryPolicy {
+  id     Int  @id @default(autoincrement())
+  shopId Int  @unique
+  shop   Shop @relation(fields: [shopId], references: [id])
+
+  type           ExpiryType @default(NONE)
+  rollingDays    Int? // required if type=ROLLING
+  fixedDate      DateTime? // required if type=FIXED_DATE
+  issueGraceDays Int? // optional grace days before expiry starts counting
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// RULES
+// -----------------------------------------------------------------------------
+model EarningRule {
+  id     Int  @id @default(autoincrement())
+  shopId Int
+  shop   Shop @relation(fields: [shopId], references: [id])
+
+  type        EarningRuleType
+  title       String
+  description String?
+
+  // math
+  multiplier        Float? // e.g., 2x points for tagged products
+  fixedPoints       Int? // e.g., Signup = 200 points
+  applyOncePerOrder Boolean     @default(false)
+  capPerOrder       Int?
+  capPerCustomer    Int?
+  capWindowUnit     PeriodUnit?
+  capWindowCount    Int? // e.g., 1 per MONTH
+
+  // scoping/conditions (use JSON to be flexible)
+  conditions Json? // e.g., { "product_tags": ["new"], "collection_ids": [123] }
+
+  // schedule
+  enabled     Boolean   @default(true)
+  activeFrom  DateTime?
+  activeUntil DateTime?
+
+  priority Int @default(100) // lower = evaluated earlier
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shopId, type, enabled, priority])
+}
+
+model RedemptionRule {
+  id     Int  @id @default(autoincrement())
+  shopId Int
+  shop   Shop @relation(fields: [shopId], references: [id])
+
+  type        RedemptionRuleType
+  title       String
+  description String?
+
+  // Spend logic
+  minPoints  Int  @default(0) // minimum to redeem
+  stepPoints Int? // increments (e.g., 100 points per step)
+
+  // Discount effect
+  discountCents    Int? // fixed discount (cents)
+  discountPercent  Float? // % discount
+  maxDiscountCents Int? // cap
+  requiresCode     Boolean @default(false) // whether a code is issued
+
+  // Scope conditions (JSON)
+  conditions Json? // e.g., collections, product ids
+
+  enabled     Boolean   @default(true)
+  activeFrom  DateTime?
+  activeUntil DateTime?
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  RewardRedemption RewardRedemption[]
+
+  @@index([shopId, type, enabled])
+}
+
+// -----------------------------------------------------------------------------
+// TIERS
+// -----------------------------------------------------------------------------
+model Tier {
+  id     Int  @id @default(autoincrement())
+  shopId Int
+  shop   Shop @relation(fields: [shopId], references: [id])
+
+  name      String
+  minPoints Int     @default(0) // threshold to enter tier
+  color     String? // UI hint
+  icon      String? // UI hint (emoji/url)
+
+  windowType         TierWindowType @default(LIFETIME)
+  windowDays         Int? // required if windowType=ROLLING_WINDOW_DAYS
+  downgradeGraceDays Int? // optional grace before downgrade
+
+  benefits  Json? // structured benefits list (UI copy-friendly)
+  sortOrder Int   @default(100)
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  Customer  Customer[]
+
+  @@index([shopId, sortOrder])
+}
+
+// -----------------------------------------------------------------------------
+// CUSTOMERS & BALANCES
+// -----------------------------------------------------------------------------
+model Customer {
+  id     Int  @id @default(autoincrement())
+  shopId Int
+  shop   Shop @relation(fields: [shopId], references: [id])
+
+  shopCustomerId   BigInt // Shopify customer ID
+  email            String?
+  acceptsMarketing Boolean?
+
+  // Loyalty profile
+  pointBalance   Int     @default(0) // current spendable balance
+  lifetimePoints Int     @default(0)
+  currentTierId  Int?
+  currentTier    Tier?   @relation(fields: [currentTierId], references: [id])
+  referralCode   String? @unique
+  referredByCode String?
+
+  birthday       DateTime?
+  lastEarnedAt   DateTime?
+  lastRedeemedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ledgers     PointLedger[]
+  redemptions RewardRedemption[]
+  snapshots   BalanceSnapshot[]
+
+  @@unique([shopId, shopCustomerId])
+  @@index([shopId, email])
+}
+
+model PointLedger {
+  id         Int      @id @default(autoincrement())
+  shopId     Int
+  customerId Int
+  shop       Shop     @relation(fields: [shopId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  // +/- points (delta). positive = earn, negative = spend/adjust/expire
+  delta  Int
+  reason LedgerReason
+  source LedgerSource
+  note   String?
+
+  // Order linkage (if any)
+  orderId   BigInt?
+  orderName String?
+
+  // Lifecycle
+  status      LedgerStatus @default(PENDING)
+  availableAt DateTime? // when status flips to AVAILABLE
+  expiresAt   DateTime? // optional expiry date (computed via policy)
+
+  // Auditing / payload
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([shopId, customerId, status])
+  @@index([shopId, orderId])
+}
+
+model RewardRedemption {
+  id         Int            @id @default(autoincrement())
+  shopId     Int
+  customerId Int
+  ruleId     Int
+  shop       Shop           @relation(fields: [shopId], references: [id])
+  customer   Customer       @relation(fields: [customerId], references: [id])
+  rule       RedemptionRule @relation(fields: [ruleId], references: [id])
+
+  pointsSpent Int
+  code        String? @unique // optional generated code
+  valueCents  Int? // realized discount value (for reporting)
+
+  status  String  @default("ISSUED") // ISSUED|APPLIED|CANCELLED|REFUNDED (simple string for flexibility)
+  orderId BigInt?
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shopId, customerId, status])
+}
+
+model BalanceSnapshot {
+  id         Int      @id @default(autoincrement())
+  shopId     Int
+  customerId Int
+  shop       Shop     @relation(fields: [shopId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  balance        Int // current balance at snapshot time
+  lifetimePoints Int
+  tierId         Int?
+  takenAt        DateTime @default(now())
+
+  @@index([shopId, customerId, takenAt])
+}
+
+// -----------------------------------------------------------------------------
+// GOALS & REPORTING
+// -----------------------------------------------------------------------------
+model GoalConfig {
+  id     Int  @id @default(autoincrement())
+  shopId Int  @unique
+  shop   Shop @relation(fields: [shopId], references: [id])
+
+  type          GoalType @default(SUBTOTAL)
+  subtotalCents Int? // when type=SUBTOTAL
+  pointsGoal    Int? // when type=POINTS
+
+  // UI helpers
+  barEnabled Boolean @default(true)
+  barColorFg String? // hex
+  barColorBg String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// WEBHOOK / DIAGNOSTICS
+// -----------------------------------------------------------------------------
+model WebhookLog {
+  id     Int  @id @default(autoincrement())
+  shopId Int
+  shop   Shop @relation(fields: [shopId], references: [id])
+
+  topic      String
+  success    Boolean @default(true)
+  statusCode Int?
+  payload    Json?
+  error      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([shopId, topic, createdAt])
+}

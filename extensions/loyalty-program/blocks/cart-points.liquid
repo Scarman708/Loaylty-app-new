@@ -1,0 +1,113 @@
+{% comment %}
+  Cart Points (Theme App Block)
+  - Place on the cart template (or any section where `cart` is available).
+  - Shows "You'll earn X points" based on cart.total_price and a configurable rate.
+  - Reuses assets: assets/loyalty-widget.css & assets/loyalty-widget.js
+  - Initial calc is server-side (Liquid). We can add live updates in JS later if needed.
+{% endcomment %}
+
+{% schema %}
+{
+  "name": "Cart points",
+  "target": "section",
+  "stylesheet": "assets/loyalty-widget.css",
+  "javascript": "assets/loyalty-widget.js",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "Heading", "default": "Cart rewards" },
+    { "type": "textarea", "id": "subtext", "label": "Subtext", "default": "Checkout to collect points for this order." },
+
+    { "type": "range", "id": "points_per_unit", "label": "Points per 1 {{ shop.currency }}", "default": 10, "min": 1, "max": 100, "step": 1 },
+
+    {
+      "type": "select", "id": "rounding",
+      "label": "Rounding",
+      "default": "nearest",
+      "options": [
+        { "value": "down", "label": "Round down" },
+        { "value": "nearest", "label": "Round to nearest" },
+        { "value": "up", "label": "Round up" }
+      ]
+    },
+
+    { "type": "checkbox", "id": "show_icon", "label": "Show icon", "default": true },
+    { "type": "range", "id": "corner_radius", "label": "Corner radius", "default": 14, "min": 0, "max": 30, "step": 1, "unit": "px" },
+    { "type": "color", "id": "bg", "label": "Background", "default": "#f6f7f9" },
+    { "type": "color", "id": "fg", "label": "Text color", "default": "#111111" },
+    {
+      "type": "select", "id": "align", "label": "Alignment", "default": "left",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" },
+        { "value": "right", "label": "Right" }
+      ]
+    }
+  ]
+}
+{% endschema %}
+
+{%- assign s = block.settings -%}
+
+{%- comment -%}
+  Use `cart.total_price` (cents). If cart is unavailable or empty, fall back to 0.
+{%- endcomment -%}
+{%- if cart and cart.item_count > 0 -%}
+  {%- assign price_cents = cart.total_price -%}
+{%- else -%}
+  {%- assign price_cents = 0 -%}
+{%- endif -%}
+
+{%- assign price_major = price_cents | divided_by: 100.0 -%}
+{%- assign rate = s.points_per_unit | default: 10 -%}
+{%- assign raw_points = price_major | times: rate -%}
+
+{%- if s.rounding == 'down' -%}
+  {%- assign earn_points = raw_points | floor -%}
+{%- elsif s.rounding == 'up' -%}
+  {%- assign earn_points = raw_points | ceil -%}
+{%- else -%}
+  {%- assign earn_points = raw_points | round -%}
+{%- endif -%}
+
+<div
+  class="loyalty-widget loyalty-widget--card"
+  id="cart-points-{{ block.id }}"
+  data-block-id="{{ block.id }}"
+  data-component="cart-points"
+  data-customer-id="{{ customer.id | default: '' }}"
+  data-price-cents="{{ price_cents }}"
+  data-rate="{{ rate }}"
+  data-rounding="{{ s.rounding }}"
+  style="
+    --lw-bg: {{ s.bg }};
+    --lw-fg: {{ s.fg }};
+    --lw-radius: {{ s.corner_radius | default: 14 }}px;
+    --lw-align: {{ s.align }};
+  "
+>
+  <div class="loyalty-widget__content">
+    <div class="loyalty-widget__row">
+      {% if s.show_icon %}
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5
+            2 6 4 4 6.5 4c1.74 0 3.41.81 4.5 2.09C12.09 4.81 13.76 4 15.5 4
+            18 4 20 6 20 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      {% endif %}
+      <h3 class="loyalty-widget__heading">
+        {{ s.heading | default: 'Cart rewards' | escape }}
+      </h3>
+    </div>
+
+    <p class="loyalty-widget__subtext">
+      {% if price_cents > 0 %}
+        You’ll earn <strong>{{ earn_points }}</strong> points for this order.
+        {% if s.subtext != blank %}<br>{{ s.subtext | newline_to_br }}{% endif %}
+      {% else %}
+        {{ s.subtext | default: 'Your cart is empty. Add products to start earning points.' | newline_to_br }}
+      {% endif %}
+    </p>
+  </div>
+
+  <!-- Optional mount for future dynamic updates -->
+  <div id="loyalty-mount-{{ block.id }}"></div>
+</div>
