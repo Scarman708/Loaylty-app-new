@@ -1,0 +1,302 @@
+{%- liquid
+  assign dashboard_title = block.settings.dashboard_title | default: 'My Loyalty Dashboard'
+-%}
+
+{% if customer %}
+  <div class="loyalty-dashboard" {{ block.shopify_attributes }}>
+    <div class="loyalty-dashboard__container">
+      <h1 class="loyalty-dashboard__title">{{ dashboard_title }}</h1>
+      
+      <div id="loyalty-dashboard-content" class="loyalty-dashboard__content">
+        <div class="loyalty-dashboard__loading">
+          <p>Loading your loyalty information...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .loyalty-dashboard {
+      padding: 2rem 1rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .loyalty-dashboard__container {
+      background: #fff;
+    }
+    
+    .loyalty-dashboard__title {
+      margin-bottom: 2rem;
+      font-size: 2rem;
+      font-weight: 600;
+    }
+    
+    .loyalty-dashboard__loading {
+      text-align: center;
+      padding: 3rem;
+      color: #666;
+    }
+    
+    .loyalty-dashboard__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .loyalty-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .loyalty-card--secondary {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+    
+    .loyalty-card--tertiary {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    
+    .loyalty-card__title {
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      opacity: 0.9;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .loyalty-card__value {
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+    
+    .loyalty-card__subtitle {
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+      opacity: 0.8;
+    }
+    
+    .loyalty-history {
+      margin-top: 3rem;
+    }
+    
+    .loyalty-history__title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+    
+    .loyalty-history__empty {
+      text-align: center;
+      padding: 3rem;
+      background: #f9fafb;
+      border-radius: 8px;
+      color: #666;
+    }
+    
+    .loyalty-history__table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .loyalty-history__table th,
+    .loyalty-history__table td {
+      padding: 1rem;
+      text-align: left;
+    }
+    
+    .loyalty-history__table th {
+      background: #f9fafb;
+      font-weight: 600;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .loyalty-history__table td {
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .loyalty-history__table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .loyalty-history__table tbody tr:hover {
+      background: #f9fafb;
+    }
+    
+    .points-positive {
+      color: #10b981;
+      font-weight: 600;
+    }
+    
+    .points-negative {
+      color: #ef4444;
+      font-weight: 600;
+    }
+    
+    .loyalty-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 1.5rem;
+      color: #991b1b;
+    }
+    
+    .loyalty-error__title {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    
+    @media (max-width: 768px) {
+      .loyalty-dashboard {
+        padding: 1rem;
+      }
+      
+      .loyalty-dashboard__title {
+        font-size: 1.5rem;
+      }
+      
+      .loyalty-card__value {
+        font-size: 2rem;
+      }
+      
+      .loyalty-history__table {
+        font-size: 0.875rem;
+      }
+      
+      .loyalty-history__table th,
+      .loyalty-history__table td {
+        padding: 0.75rem 0.5rem;
+      }
+    }
+  </style>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async function() {
+      const contentDiv = document.getElementById('loyalty-dashboard-content');
+      
+      try {
+        // Fetch customer loyalty data
+        const response = await fetch("/apps/loyalty-program/api/loyalty/dashboard?customerId={{ customer.id }}", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load dashboard');
+        }
+
+        if (!data.enrolled) {
+          contentDiv.innerHTML = `
+            <div class="loyalty-error">
+              <div class="loyalty-error__title">Not Enrolled</div>
+              <p>You're not enrolled in our loyalty program yet. Join now to start earning points!</p>
+            </div>
+          `;
+          return;
+        }
+
+        // Render dashboard
+        contentDiv.innerHTML = `
+          <div class="loyalty-dashboard__grid">
+            <div class="loyalty-card">
+              <div class="loyalty-card__title">Total Points</div>
+              <div class="loyalty-card__value">${data.points || 0}</div>
+              <div class="loyalty-card__subtitle">Available to redeem</div>
+            </div>
+            
+            <div class="loyalty-card loyalty-card--secondary">
+              <div class="loyalty-card__title">Member Since</div>
+              <div class="loyalty-card__value">${new Date(data.joinedDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
+              <div class="loyalty-card__subtitle">Loyal customer</div>
+            </div>
+            
+            <div class="loyalty-card loyalty-card--tertiary">
+              <div class="loyalty-card__title">Membership Tier</div>
+              <div class="loyalty-card__value">${data.tier || 'Bronze'}</div>
+              <div class="loyalty-card__subtitle">Keep earning to level up</div>
+            </div>
+          </div>
+          
+          <div class="loyalty-history">
+            <h2 class="loyalty-history__title">Recent Activity</h2>
+            ${data.transactions && data.transactions.length > 0 ? `
+              <table class="loyalty-history__table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th style="text-align: right;">Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${data.transactions.map(t => `
+                    <tr>
+                      <td>${new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                      <td>${t.description}</td>
+                      <td style="text-align: right;" class="${t.points > 0 ? 'points-positive' : 'points-negative'}">
+                        ${t.points > 0 ? '+' : ''}${t.points}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : `
+              <div class="loyalty-history__empty">
+                <p>No activity yet. Start shopping to earn points!</p>
+              </div>
+            `}
+          </div>
+        `;
+
+      } catch (err) {
+        console.error('Dashboard error:', err);
+        contentDiv.innerHTML = `
+          <div class="loyalty-error">
+            <div class="loyalty-error__title">Error Loading Dashboard</div>
+            <p>${err.message}</p>
+            <p>Please try refreshing the page or contact support if the problem persists.</p>
+          </div>
+        `;
+      }
+    });
+  </script>
+{% else %}
+  <div class="loyalty-dashboard" {{ block.shopify_attributes }}>
+    <div class="loyalty-dashboard__container">
+      <div class="loyalty-error">
+        <div class="loyalty-error__title">Login Required</div>
+        <p>Please <a href="/account/login">log in</a> to view your loyalty dashboard.</p>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Loyalty Dashboard",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "dashboard_title",
+      "label": "Dashboard Title",
+      "default": "My Loyalty Dashboard"
+    }
+  ]
+}
+{% endschema %}

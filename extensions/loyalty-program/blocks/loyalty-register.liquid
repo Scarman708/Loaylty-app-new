@@ -1,0 +1,192 @@
+{%- liquid
+  assign button_text = block.settings.button_text | default: 'Join Loyalty Program'
+  assign login_message = block.settings.login_message | default: 'Please log in to join our loyalty program.'
+  assign success_message = block.settings.success_message | default: '🎉 You are now part of our loyalty program!'
+  assign error_message = block.settings.error_message | default: 'Something went wrong. Please try again.'
+-%}
+
+{% if customer %}
+  <div id="loyalty-register" class="loyalty-register" {{ block.shopify_attributes }}>
+    <button type="button" class="button loyalty-register__button" id="join-loyalty">
+      {{- button_text -}}
+    </button>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const button = document.getElementById('join-loyalty');
+      if (!button) return;
+
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.textContent = 'Joining...';
+
+        try {
+          // Send customer info to the App Proxy endpoint
+          const response = await fetch("/apps/loyalty-program/api/loyalty/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              shopCustomerId: "{{ customer.id }}",
+              email: "{{ customer.email }}",
+              acceptsMarketing: {{ customer.accepts_marketing | default: false }}
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || `HTTP error! status: ${response.status}`);
+          }
+
+          // Display success message
+          alert(data.message || {{ success_message | json }});
+
+          if (data.success) {
+            button.textContent = 'Redirecting...';
+            
+            // Redirect to dashboard after 1 second
+            setTimeout(() => {
+              window.location.href = '/pages/loyalty-dashboard';
+            }, 1000);
+          } else {
+            button.textContent = {{ button_text | json }};
+            button.disabled = false;
+          }
+
+        } catch (err) {
+          console.error('Error:', err);
+          alert(err.message || {{ error_message | json }});
+          button.textContent = {{ button_text | json }};
+          button.disabled = false;
+        }
+      });
+    });
+  </script>
+{% else %}
+  <p class="loyalty-register__login-message">{{ login_message }}</p>
+{% endif %}
+
+
+
+{% schema %}
+{
+  "name": "Loyalty Registration",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["*"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "Content"
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button Text",
+      "default": "Join Loyalty Program"
+    },
+    {
+      "type": "textarea",
+      "id": "login_message",
+      "label": "Login Required Message",
+      "default": "Please log in to join our loyalty program."
+    },
+    {
+      "type": "textarea",
+      "id": "success_message",
+      "label": "Success Message",
+      "default": "🎉 You are now part of our loyalty program!"
+    },
+    {
+      "type": "textarea",
+      "id": "error_message",
+      "label": "Error Message",
+      "default": "Something went wrong. Please try again."
+    },
+    {
+      "type": "header",
+      "content": "Appearance"
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button Background",
+      "default": "#000000"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Button Text",
+      "default": "#ffffff"
+    },
+    {
+      "type": "select",
+      "id": "button_style",
+      "label": "Button Style",
+      "options": [
+        {
+          "value": "primary",
+          "label": "Primary"
+        },
+        {
+          "value": "secondary",
+          "label": "Secondary"
+        }
+      ],
+      "default": "primary"
+    },
+    {
+      "type": "range",
+      "id": "button_padding",
+      "min": 8,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "label": "Button Padding",
+      "default": 12
+    },
+    {
+      "type": "checkbox",
+      "id": "show_border",
+      "label": "Show Border",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Advanced"
+    },
+    {
+      "type": "text",
+      "id": "custom_class",
+      "label": "Custom CSS Class"
+    }
+  ]
+}
+{% endschema %}
+
+<style>
+  .loyalty-register {
+    margin: 20px 0;
+    text-align: center;
+  }
+  .loyalty-register__button {
+    background-color: {{ block.settings.button_color | default: '#000000' }};
+    color: {{ block.settings.button_text_color | default: '#ffffff' }};
+    padding: 12px 24px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: opacity 0.2s ease;
+  }
+  .loyalty-register__button:hover {
+    opacity: 0.9;
+  }
+  .loyalty-register__login-message {
+    text-align: center;
+    margin: 20px 0;
+    color: #666;
+  }
+</style>

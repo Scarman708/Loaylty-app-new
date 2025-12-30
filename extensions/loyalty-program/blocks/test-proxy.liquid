@@ -1,0 +1,55 @@
+<div id="test-proxy-block">
+  <button id="test-proxy-btn">
+    Test App Proxy
+  </button>
+
+  <pre id="test-proxy-result" style="margin-top: 10px;"></pre>
+</div>
+
+<script>
+  document.getElementById('test-proxy-btn').addEventListener('click', async () => {
+    const resultEl = document.getElementById('test-proxy-result');
+    resultEl.textContent = 'Testing...';
+
+    try {
+      const response = await fetch('/apps/loyalty-program/api/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          testData: 'Hello from Liquid App Proxy!'
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Proxy request failed');
+      }
+
+      resultEl.textContent =
+        '✅ Success:\n' + JSON.stringify(data, null, 2);
+
+    } catch (err) {
+      resultEl.textContent =
+        '❌ Error:\n' + err.message;
+    }
+  });
+</script>
+
+
+{% schema %}
+{
+  "name": "App Proxy Test",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "Test App Proxy"
+    }
+  ]
+}
+{% endschema %}

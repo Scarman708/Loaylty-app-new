@@ -7,6 +7,9 @@ import db from '../db.server';
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
+  if (!session) {
+    throw new Response('Authentication failed', { status: 401 });
+  }
   const shop = session.shop;
 
   // Get shop data
@@ -46,6 +49,50 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     include: { customer: true },
   });
 
+  // Get customers with their details
+  const customersWithDetails = await db.customer.findMany({
+    where: { shopId: shopData.id },
+    include: {
+      ledgers: true,
+      currentTier: true,
+    },
+  });
+
+  // Get all tiers for this shop
+  const allTiers = await db.tier.findMany({
+    where: { shopId: shopData.id },
+    orderBy: { minPoints: 'asc' },
+  });
+
+  // Process customer data with additional details
+  const customerList = customersWithDetails.map(customer => {
+    const totalPoints = customer.lifetimePoints; // Using lifetimePoints from the customer model
+    const joinDate = customer.createdAt;
+    
+    // Determine tier based on points or use current tier
+    let customerTier = customer.currentTier?.name || 'Bronze';
+    if (!customer.currentTier && allTiers.length > 0) {
+      // If no current tier, find the highest tier the customer qualifies for
+      for (let i = allTiers.length - 1; i >= 0; i--) {
+        if (totalPoints >= allTiers[i].minPoints) {
+          customerTier = allTiers[i].name;
+          break;
+        }
+      }
+    }
+
+    return {
+      id: customer.id,
+      email: customer.email || 'No email',
+      name: customer.email?.split('@')[0] || 'Customer',
+      points: totalPoints,
+      tier: customerTier,
+      joinDate: joinDate,
+      orderCount: 0, // Not directly available in the schema
+      lastOrder: customer.lastEarnedAt || customer.lastRedeemedAt || null,
+    };
+  });
+
   return json({
     shop: {
       name: shop,
@@ -68,11 +115,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       reason: activity.reason,
       createdAt: activity.createdAt,
     })),
+    customers: customerList,
   });
 };
 
 export default function DashboardPage() {
-  const { shop, program, stats, tiers, recentActivity } = useLoaderData<typeof loader>();
+  const { shop, program, stats, tiers, recentActivity, customers } = useLoaderData<typeof loader>();
 
   return (
     <Page>
@@ -159,6 +207,36 @@ export default function DashboardPage() {
                 />
               ) : (
                 <Text as="p" variant="bodyMd" tone="subdued">No recent activity</Text>
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">Customer Loyalty Details</Text>
+              <Divider />
+              {customers && customers.length > 0 ? (
+                <DataTable
+                  columnContentTypes={['text', 'text', 'text', 'numeric', 'numeric', 'text', 'text']}
+                  headings={['Name', 'Email', 'Tier', 'Points', 'Orders', 'Join Date', 'Last Order']}
+                  rows={customers.map(customer => [
+                    customer.name,
+                    customer.email,
+                    customer.tier,
+                    customer.points,
+                    customer.orderCount,
+                    new Date(customer.joinDate).toLocaleDateString(),
+                    customer.lastOrder ? new Date(customer.lastOrder).toLocaleDateString() : 'N/A',
+                  ])}
+                  sortable={[true, true, true, true, true, true, true]}
+                  initialSortColumnIndex={3}
+                  defaultSortDirection="descending"
+                  footerContent={`Showing ${customers.length} customers`}
+                />
+              ) : (
+                <Text as="p" variant="bodyMd" tone="subdued">No customer data available</Text>
               )}
             </BlockStack>
           </Card>
