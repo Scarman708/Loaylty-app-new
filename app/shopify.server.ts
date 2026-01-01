@@ -10,6 +10,7 @@ import {
 import { PrismaSessionStorage } from '@shopify/shopify-app-session-storage-prisma';
 import prisma from '~/db.server';
 
+
 export const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY!,
   apiSecretKey: process.env.SHOPIFY_API_SECRET!,
@@ -18,29 +19,72 @@ export const shopify = shopifyApp({
   isEmbeddedApp: true,
 
   scopes: (process.env.SCOPES ??
-    'read_orders,write_orders,read_customers,write_customers')
+    'read_orders,write_orders,read_customers,write_customers,write_content')
     .split(',')
     .map(s => s.trim()),
 
   sessionStorage: new PrismaSessionStorage(prisma as any),
 
   webhooks: {
-    APP_UNINSTALLED:  { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
-    ORDERS_PAID:      { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
+
+    APP_UNINSTALLED: { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
+    ORDERS_PAID: { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
     ORDERS_FULFILLED: { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
-    ORDERS_UPDATED:   { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
+    ORDERS_UPDATED: { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
     ORDERS_CANCELLED: { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
-    REFUNDS_CREATE:   { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
+    REFUNDS_CREATE: { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
     CUSTOMERS_CREATE: { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
     CUSTOMERS_UPDATE: { deliveryMethod: DeliveryMethod.Http, callbackUrl: '/webhooks' },
   },
 
   hooks: {
-    afterAuth: async ({ session }) => {
-      await shopify.registerWebhooks({ session });
-      console.log('✅ Webhooks registered for', session.shop);
-    },
+    afterAuth: async ({ session, admin }) => {
+      console.log("🔥 afterAuth FIRED for", session.shop);
+  try {
+    // 1️⃣ Register webhooks
+    await shopify.registerWebhooks({ session });
+    console.log("✅ Webhooks registered for", session.shop);
+
+    // 2️⃣ Use the `admin` client directly
+    const response = await admin.rest.post({
+      path: 'pages',
+      data: {
+        page: {
+          title: "Loyalty Dashboard",
+          body_html: `
+            <div id="loyalty-dashboard">
+          <h1>Loyalty Dashboard</h1>
+
+          <p>Welcome to your loyalty dashboard. Here you can view your points,
+          rewards, and activity.</p>
+
+          <!-- Your app can hydrate this later -->
+          <div id="loyalty-dashboard-root"></div>
+        </div>
+          `,
+          metafields: [
+            {
+              namespace: "loyalty",
+          key: "dashboard",
+          type: "single_line_text_field",
+          value: "true",
+            },
+          ],
+        },
+      },
+    });
+
+      const data = await response.json();
+
+  } catch (error) {
+    console.error("❌ Failed to create page:", error);
+  }
+},
+
+
   },
+
+
 });
 // ✅ Custom authenticate wrapper
 export const authenticate = {

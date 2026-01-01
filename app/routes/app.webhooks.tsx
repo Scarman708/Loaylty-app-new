@@ -1,15 +1,22 @@
-// app/routes/app.webhooks.tsx
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { authenticate } from "../shopify.server";
+import { authenticate } from "~/shopify.server";
 import { Page, Card, Layout } from "@shopify/polaris";
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const authResult = await authenticate.admin(request);
+
+  if (!authResult) {
+    // Not an admin-authenticated request
+    throw redirect("/auth/login");
+  }
+
+  const { admin } = authResult;
 
   const response = await admin.graphql(`
-    query {
-      webhookSubscriptions(first: 20) {
+    query GetWebhooks {
+      webhookSubscriptions(first: 50) {
         edges {
           node {
             id
@@ -32,6 +39,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     webhooks: data.data.webhookSubscriptions.edges,
   });
 };
+
 export default function WebhooksPage() {
   const { webhooks } = useLoaderData<typeof loader>();
 
@@ -40,12 +48,12 @@ export default function WebhooksPage() {
       <Layout>
         <Layout.Section>
           <Card>
-            <ul>
+            <ul style={{ margin: 0, paddingLeft: "1rem" }}>
               {webhooks.map((edge: any) => (
                 <li key={edge.node.id}>
                   <strong>{edge.node.topic}</strong>
                   {" – "}
-                  {edge.node.endpoint?.callbackUrl}
+                  {edge.node.endpoint?.callbackUrl ?? "—"}
                 </li>
               ))}
             </ul>
