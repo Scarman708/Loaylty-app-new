@@ -1,9 +1,85 @@
 {%- liquid
   assign dashboard_title = block.settings.dashboard_title | default: 'My Loyalty Dashboard'
+  
+  # Point rules from settings
+  assign points_per_dollar = block.settings.points_per_dollar | default: '100'
+  assign signup_bonus_points = block.settings.signup_bonus_points | default: '500'
+  assign birthday_bonus_points = block.settings.birthday_bonus_points | default: '200'
+  assign review_bonus_points = block.settings.review_bonus_points | default: '50'
+  assign referral_bonus_points = block.settings.referral_bonus_points | default: '100'
+  assign social_share_points = block.settings.social_share_points | default: '50'
+  
+  # Tier thresholds
+  assign silver_tier_threshold = block.settings.silver_tier_threshold | default: '1000' | plus: 0
+  assign gold_tier_threshold = block.settings.gold_tier_threshold | default: '5000' | plus: 0
+  
+  # FAQ settings
+  assign faq_title = block.settings.faq_title | default: 'Frequently Asked Questions'
+  assign faq_content = block.settings.faq_content | default: ''
+  
+  # Create point rules array for JavaScript
+  capture point_rules_json
+    echo '['
+    echo '{"points":"' | append: points_per_dollar | append: '","description":"For every $1 spent"}'
+    echo ',{"points":"' | append: signup_bonus_points | append: '","description":"Account signup bonus"}'
+    echo ',{"points":"' | append: birthday_bonus_points | append: '","description":"Birthday bonus"}'
+    echo ',{"points":"' | append: review_bonus_points | append: '","description":"Leaving a product review"}'
+    echo ',{"points":"' | append: referral_bonus_points | append: '","description":"Referring a friend"}'
+    echo ',{"points":"' | append: social_share_points | append: '","description":"Sharing on social media"}'
+    echo ']'
+  endcapture
 -%}
+{% comment %} Add this near the top of the file, after the initial liquid tags {% endcomment %}
+{%- capture point_rules_json -%}
+[
+{% if shop.metafields.loyalty.point_rules
+   and shop.metafields.loyalty.point_rules.value
+   and shop.metafields.loyalty.point_rules.value.size > 0 %}
+  
+  {% for rule in shop.metafields.loyalty.point_rules.value %}
+    {
+      "points": {{ rule.points | json }},
+      "description": {{ rule.description | json }},
+      "isActive": {{ rule.isActive | json }}
+    }{% unless forloop.last %},{% endunless %}
+  {% endfor %}
+
+{% else %}
+  {
+    "points": {{ points_per_dollar | json }},
+    "description": "For every $1 spent",
+    "isActive": true
+  }
+{% endif %}
+]
+{%- endcapture -%}
+
+
+{% comment %} Update the JavaScript section to use the point rules {% endcomment %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const pointRules = {{ point_rules_json }};
+    const pointRulesContainer = document.querySelector('.point-rules-container');
+    
+    if (pointRulesContainer && pointRules.length > 0) {
+      const activeRules = pointRules.filter(rule => rule.isActive);
+      
+      if (activeRules.length > 0) {
+        const rulesHtml = activeRules.map(rule => `
+          <div class="point-rule-card">
+            <div class="point-value">+${rule.points}</div>
+            <div class="point-description">${rule.description}</div>
+          </div>
+        `).join('');
+        
+        pointRulesContainer.innerHTML = rulesHtml;
+      }
+    }
+  });
+</script>
 
 {% if customer %}
-  <div class="loyalty-dashboard" {{ block.shopify_attributes }}>
+  <div class="loyalty-dashboard" style="width: 100%;" {{ block.shopify_attributes }}>
     <div class="loyalty-dashboard__container">
       <h1 class="loyalty-dashboard__title">{{ dashboard_title }}</h1>
       
@@ -83,9 +159,10 @@
     
     .loyalty-history {
       margin-top: 3rem;
+      margin-bottom: 2rem;
     }
     
-    .loyalty-history__title {
+    .loyalty-history__title, .section-title {
       font-size: 1.5rem;
       font-weight: 600;
       margin-bottom: 1.5rem;
@@ -159,6 +236,241 @@
       margin-bottom: 0.5rem;
     }
     
+    .collapsible {
+      background-color: #f9fafb;
+      color: #1a1a1a;
+      cursor: pointer;
+      padding: 1.25rem;
+      width: 100%;
+      border: 1px solid #e5e7eb;
+      text-align: left;
+      outline: none;
+      font-size: 1rem;
+      font-weight: 500;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+    
+    .collapsible:hover {
+      background-color: #f3f4f6;
+    }
+    
+    .collapsible:after {
+      content: '\002B';
+      font-size: 1.25rem;
+      font-weight: bold;
+      float: right;
+      margin-left: 5px;
+      transition: transform 0.3s ease;
+    }
+    
+    .active:after {
+      content: "\2212";
+    }
+    
+    .collapsible-content {
+      padding: 0 1.25rem;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.2s ease-out;
+      background-color: white;
+      margin-bottom: 1rem;
+      border-radius: 0 0 8px 8px;
+    }
+    
+    .tier-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      background: white;
+    }
+    
+    .tier-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    
+    .tier-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+    
+    .tier-status {
+      background: #e5e7eb;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    
+    .tier-status.current {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+    
+    .tier-perks {
+      margin-top: 1rem;
+    }
+    
+    .perk-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+      color: #4b5563;
+    }
+    
+    .perk-icon {
+      margin-right: 0.75rem;
+      color: #10b981;
+      flex-shrink: 0;
+      margin-top: 0.2rem;
+    }
+    
+    .upgrade-btn {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 1rem;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+    
+    .upgrade-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+    
+    .upgrade-btn:disabled {
+      background: #e5e7eb;
+      color: #9ca3af;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    
+    .point-rule {
+      display: flex;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .point-rule:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    
+    .point-amount {
+      font-weight: 600;
+      color: #1d4ed8;
+      min-width: 60px;
+    }
+    
+    .point-details {
+      flex: 1;
+    }
+    
+    .loyalty-section {
+      margin: 3rem 0;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+    
+    .loyalty-section__header {
+      padding: 2rem 2rem 1rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .loyalty-section__header p {
+      color: #4b5563;
+      margin-top: 0.5rem;
+    }
+    
+    .point-rules-container {
+      padding: 1.5rem 2rem 2rem;
+    }
+    
+    .point-rules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 1.25rem;
+      margin-top: 1rem;
+    }
+    
+    .point-rule-card {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+      transition: all 0.2s ease;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .point-rule-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    
+    .point-rule-card__points {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #4f46e5;
+      margin-bottom: 0.75rem;
+    }
+    
+    .point-rule-card__divider {
+      width: 40px;
+      height: 3px;
+      background: #e5e7eb;
+      margin: 0 auto 0.75rem;
+      border-radius: 3px;
+    }
+    
+    .point-rule-card__description {
+      color: #4b5563;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+    }
+    
+    .faq-section {
+      border-top: 1px solid #e5e7eb;
+      padding: 0 2rem;
+    }
+    
+    .faq-content {
+      padding: 1.5rem 0;
+    }
+    
+    .faq-content p {
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+      color: #4b5563;
+    }
+    
+    .faq-content p:last-child {
+      margin-bottom: 0;
+    }
+    
+    .faq-content strong {
+      color: #111827;
+      font-weight: 600;
+    }
+    
     @media (max-width: 768px) {
       .loyalty-dashboard {
         padding: 1rem;
@@ -210,13 +522,78 @@
           return;
         }
 
+        // Get point rules from Liquid to JavaScript
+      
+        
+        // Get tier thresholds from Liquid to JavaScript
+        const silverTierThreshold = {{ silver_tier_threshold }};
+        const goldTierThreshold = {{ gold_tier_threshold }};
+const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
+
+        const tiers = [
+          {
+            name: 'Bronze',
+            minPoints: 0,
+            perks: [
+              `Earn ${baseRule.points} points per $1 spent`,
+              'Exclusive member-only offers',
+              'Birthday reward',
+              'Early access to sales'
+            ],
+            nextTier: 'Silver',
+            pointsNeeded: silverTierThreshold
+          },
+          {
+            name: 'Silver',
+            minPoints: silverTierThreshold,
+            perks: [
+              'All Bronze benefits',
+              `Earn ${Math.round(parseInt(baseRule.points) * 1.25)} points per $1 spent`,
+              'Free shipping on all orders',
+              '5% discount on all purchases',
+              'Dedicated support'
+            ],
+            nextTier: 'Gold',
+            pointsNeeded: goldTierThreshold
+          },
+          {
+            name: 'Gold',
+            minPoints: goldTierThreshold,
+            perks: [
+              'All Silver benefits',
+              `Earn ${Math.round(parseInt(baseRule.points) * 1.5)} points per $1 spent`,
+              '10% discount on all purchases',
+              'Free express shipping',
+              'Exclusive products access',
+              'Surprise gifts'
+            ],
+            nextTier: null
+          }
+        ];
+
+        // Find current tier and next tier
+        const currentTier = data.tier || 'Bronze';
+        const currentTierData = tiers.find(t => t.name === currentTier) || tiers[0];
+        const nextTier = tiers.find(t => t.name === currentTierData.nextTier);
+        const currentPoints = data.points || 0;
+
         // Render dashboard
         contentDiv.innerHTML = `
           <div class="loyalty-dashboard__grid">
             <div class="loyalty-card">
               <div class="loyalty-card__title">Total Points</div>
-              <div class="loyalty-card__value">${data.points || 0}</div>
+              <div class="loyalty-card__value">${currentPoints.toLocaleString()}</div>
               <div class="loyalty-card__subtitle">Available to redeem</div>
+              ${nextTier ? `
+                <div class="loyalty-card__progress" style="margin-top: 1rem;">
+                  <div style="background: rgba(255,255,255,0.2); height: 6px; border-radius: 3px; margin-bottom: 0.5rem;">
+                    <div style="width: ${Math.min(100, (currentPoints / nextTier.pointsNeeded) * 100)}%; background: white; height: 100%; border-radius: 3px;"></div>
+                  </div>
+                  <div style="font-size: 0.75rem; opacity: 0.8;">
+                    ${nextTier.pointsNeeded - currentPoints} points to ${nextTier.name}
+                  </div>
+                </div>
+              ` : ''}
             </div>
             
             <div class="loyalty-card loyalty-card--secondary">
@@ -227,8 +604,8 @@
             
             <div class="loyalty-card loyalty-card--tertiary">
               <div class="loyalty-card__title">Membership Tier</div>
-              <div class="loyalty-card__value">${data.tier || 'Bronze'}</div>
-              <div class="loyalty-card__subtitle">Keep earning to level up</div>
+              <div class="loyalty-card__value">${currentTier}</div>
+              <div class="loyalty-card__subtitle">${nextTier ? `Earn ${nextTier.pointsNeeded - currentPoints} more points for ${nextTier.name} tier` : 'You\'ve reached the highest tier!'}</div>
             </div>
           </div>
           
@@ -261,6 +638,70 @@
               </div>
             `}
           </div>
+          
+          <div class="loyalty-section">
+            <div class="loyalty-section__header">
+              <h2 class="section-title">How to Earn Points</h2>
+              <p>Discover all the ways you can earn points and unlock amazing rewards.</p>
+            </div>
+            
+            <div class="point-rules-container">
+              <div class="point-rules-grid">
+                ${pointRules.map(rule => `
+                  <div class="point-rule-card">
+                    <div class="point-rule-card__points">+${rule.points}</div>
+                    <div class="point-rule-card__divider"></div>
+                    <div class="point-rule-card__description">${rule.description}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            
+            <div class="faq-section">
+              <button type="button" class="collapsible">
+                <span>Frequently Asked Questions</span>
+                <span class="collapsible-icon">+</span>
+              </button>
+              <div class="collapsible-content">
+                <div class="faq-content">
+                  {{ faq_content }}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="tier-benefits">
+            <h2 class="section-title">Membership Tiers</h2>
+            ${tiers.map(tier => `
+              <div class="tier-card">
+                <div class="tier-header">
+                  <div class="tier-name">${tier.name} Tier</div>
+                  <div class="tier-status ${tier.name === currentTier ? 'current' : ''}">
+                    ${tier.name === currentTier ? 'Current Tier' : (tier.minPoints > currentPoints ? `${tier.minPoints.toLocaleString()} points needed` : '')}
+                  </div>
+                </div>
+                
+                <div class="tier-perks">
+                  ${tier.perks.map(perk => `
+                    <div class="perk-item">
+                      <span class="perk-icon">✓</span>
+                      <span>${perk}</span>
+                    </div>
+                  `).join('')}
+                </div>
+                
+                ${tier.name === currentTier && tier.nextTier ? `
+                  <button class="upgrade-btn" disabled>
+                    Your Current Tier
+                  </button>
+                ` : tier.minPoints > currentPoints ? `
+                  <button class="upgrade-btn" disabled>
+                    ${tier.minPoints - currentPoints} More Points to Unlock
+                  </button>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
         `;
 
       } catch (err) {
@@ -273,30 +714,106 @@
           </div>
         `;
       }
-    });
+      });
+      
+      // Add collapsible functionality
+      document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('collapsible') || e.target.closest('.collapsible')) {
+          const collapsible = e.target.classList.contains('collapsible') ? e.target : e.target.closest('.collapsible');
+          collapsible.classList.toggle('active');
+          const content = collapsible.nextElementSibling;
+          if (content.style.maxHeight) {
+            content.style.maxHeight = null;
+          } else {
+            content.style.maxHeight = content.scrollHeight + 'px';
+          }
+        }
+      });
   </script>
-{% else %}
-  <div class="loyalty-dashboard" {{ block.shopify_attributes }}>
-    <div class="loyalty-dashboard__container">
-      <div class="loyalty-error">
-        <div class="loyalty-error__title">Login Required</div>
-        <p>Please <a href="/account/login">log in</a> to view your loyalty dashboard.</p>
-      </div>
-    </div>
-  </div>
 {% endif %}
-
-{% schema %}
-{
-  "name": "Loyalty Dashboard",
-  "target": "section",
-  "settings": [
-    {
-      "type": "text",
-      "id": "dashboard_title",
-      "label": "Dashboard Title",
-      "default": "My Loyalty Dashboard"
-    }
-  ]
-}
-{% endschema %}
+  {% schema %}
+  {
+    "name": "Loyalty Dashboard",
+    "target": "section",
+    "settings": [
+      {
+        "type": "text",
+        "id": "dashboard_title",
+        "label": "Dashboard Title",
+        "default": "My Loyalty Dashboard"
+      },
+      {
+        "type": "header",
+        "content": "Point Rules"
+      },
+      {
+        "type": "text",
+        "id": "points_per_dollar",
+        "label": "Points per $1 spent",
+        "default": "100"
+      },
+      {
+        "type": "text",
+        "id": "signup_bonus_points",
+        "label": "Signup Bonus Points",
+        "default": "500"
+      },
+      {
+        "type": "text",
+        "id": "birthday_bonus_points",
+        "label": "Birthday Bonus Points",
+        "default": "200"
+      },
+      {
+        "type": "text",
+        "id": "review_bonus_points",
+        "label": "Review Bonus Points",
+        "default": "50"
+      },
+      {
+        "type": "text",
+        "id": "referral_bonus_points",
+        "label": "Referral Bonus Points",
+        "default": "100"
+      },
+      {
+        "type": "text",
+        "id": "social_share_points",
+        "label": "Social Share Points",
+        "default": "50"
+      },
+      {
+        "type": "header",
+        "content": "Tier Settings"
+      },
+      {
+        "type": "text",
+        "id": "silver_tier_threshold",
+        "label": "Silver Tier Points Threshold",
+        "default": "1000"
+      },
+      {
+        "type": "text",
+        "id": "gold_tier_threshold",
+        "label": "Gold Tier Points Threshold",
+        "default": "5000"
+      },
+      {
+        "type": "header",
+        "content": "FAQ Settings"
+      },
+      {
+        "type": "text",
+        "id": "faq_title",
+        "label": "FAQ Section Title",
+        "default": "Frequently Asked Questions"
+      },
+      {
+        "type": "richtext",
+        "id": "faq_content",
+        "label": "FAQ Content",
+        "default": "<p><strong>How do I earn points?</strong><br>You can earn points by making purchases, referring friends, leaving reviews, and more.</p><p><strong>How do I redeem my points?</strong><br>Points can be redeemed at checkout for discounts and special offers.</p><p><strong>Do points expire?</strong><br>Points typically expire after 12 months of inactivity.</p>"
+      }
+    ]
+  }
+  {% endschema %}

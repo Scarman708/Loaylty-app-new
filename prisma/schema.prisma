@@ -46,6 +46,7 @@ model Shop {
   redemptionRules RedemptionRule[]
   redemptions     RewardRedemption[]
   tiers           Tier[]
+  pointRules      PointRule[] 
   webhooks        WebhookLog[]
 
   @@index([status])
@@ -71,6 +72,30 @@ model ProgramSettings {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   shop              Shop          @relation(fields: [shopId], references: [id])
+}
+
+model PointRule {
+  id          Int             @id @default(autoincrement())
+  shopId      Int
+  type        PointRuleType
+  points      Int
+  description String
+  isActive    Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  shop        Shop            @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, type])
+}
+
+enum PointRuleType {
+  PURCHASE
+  SIGNUP
+  BIRTHDAY
+  REVIEW
+  REFERRAL
+  SOCIAL_SHARE
 }
 
 model ExpiryPolicy {
