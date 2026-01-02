@@ -29,6 +29,11 @@
     echo ']'
   endcapture
 -%}
+
+<script>
+  window.pointRules = {{ point_rules_json | strip_newlines }};
+</script>
+
 {% comment %} Add this near the top of the file, after the initial liquid tags {% endcomment %}
 {%- capture point_rules_json -%}
 [
@@ -55,28 +60,7 @@
 {%- endcapture -%}
 
 
-{% comment %} Update the JavaScript section to use the point rules {% endcomment %}
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const pointRules = {{ point_rules_json }};
-    const pointRulesContainer = document.querySelector('.point-rules-container');
-    
-    if (pointRulesContainer && pointRules.length > 0) {
-      const activeRules = pointRules.filter(rule => rule.isActive);
-      
-      if (activeRules.length > 0) {
-        const rulesHtml = activeRules.map(rule => `
-          <div class="point-rule-card">
-            <div class="point-value">+${rule.points}</div>
-            <div class="point-description">${rule.description}</div>
-          </div>
-        `).join('');
-        
-        pointRulesContainer.innerHTML = rulesHtml;
-      }
-    }
-  });
-</script>
+
 
 {% if customer %}
   <div class="loyalty-dashboard" style="width: 100%;" {{ block.shopify_attributes }}>
@@ -498,7 +482,11 @@
   <script>
     document.addEventListener('DOMContentLoaded', async function() {
       const contentDiv = document.getElementById('loyalty-dashboard-content');
-      
+      const pointRules = Array.isArray(window.pointRules)
+      ? window.pointRules
+      : [];
+
+    const baseRule = pointRules.find(r => r.isActive) || { points: 0 }; 
       try {
         // Fetch customer loyalty data
         const response = await fetch("/apps/loyalty-program/api/loyalty/dashboard?customerId={{ customer.id }}", {
@@ -660,7 +648,7 @@ const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
             <div class="faq-section">
               <button type="button" class="collapsible">
                 <span>Frequently Asked Questions</span>
-                <span class="collapsible-icon">+</span>
+                
               </button>
               <div class="collapsible-content">
                 <div class="faq-content">
