@@ -16,9 +16,6 @@ import {
   Badge,
   Icon,
   ButtonGroup,
-  Modal,
-  Select,
-  TextContainer,
 } from '@shopify/polaris';
 import { TitleBar } from '@shopify/app-bridge-react';
 import { authenticate } from '../shopify.server';
@@ -34,9 +31,7 @@ type PointRuleForm = {
   isActive: boolean;
   sortOrder: number;
 };
-type ProgramWithPointRules = ProgramSettings & {
-  pointRules: PointRule[];
-};
+
 // Types for our form data
 type SettingsFormData = {
   pointsPerDollar: number;
@@ -93,6 +88,7 @@ const DEFAULT_POINT_RULES: Record<PointRuleType, Omit<PointRuleForm, 'id'>> = {
     sortOrder: 5
   }
 };
+
 async function requireAdmin(request: Request) {
   const admin = await authenticate.admin(request);
   if (!admin) {
@@ -101,20 +97,17 @@ async function requireAdmin(request: Request) {
   return admin;
 }
 
-
 export const loader = async ({ request }: ActionFunctionArgs) => {
-
   const { session } = await requireAdmin(request);
 
   const shop = await db.shop.findUnique({
     where: { shopDomain: session.shop },
     include: {
-  program: true,
-  pointRules: {
-    orderBy: { sortOrder: 'asc' }
-  }
-}
-
+      program: true,
+      pointRules: {
+        orderBy: { sortOrder: 'asc' }
+      }
+    }
   });
 
   if (!shop) {
@@ -123,7 +116,7 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
 
   if (!shop.program) {
     // Create default program settings and point rules
-    const [program] = await db.$transaction([
+    await db.$transaction([
       db.programSettings.create({
         data: {
           shopId: shop.id,
@@ -153,16 +146,16 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
     const updatedShop = await db.shop.findUnique({
       where: { id: shop.id },
       include: {
-  program: true,
-  pointRules: {
-    orderBy: { sortOrder: 'asc' }
-  }
-}
-
+        program: true,
+        pointRules: {
+          orderBy: { sortOrder: 'asc' }
+        }
+      }
     });
 
     return json({ 
       program: updatedShop!.program!,
+      pointRules: updatedShop!.pointRules,
       currency: shop.currencyCode || 'USD'
     });
   }
@@ -175,8 +168,7 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
     .map(([_, rule], index) => ({
       ...rule,
       points: rule.points.toString(),
-sortOrder: shop.pointRules.length + index
-
+      sortOrder: shop.pointRules.length + index
     }));
 
   if (missingRules.length > 0) {
@@ -199,32 +191,29 @@ sortOrder: shop.pointRules.length + index
     const updatedShop = await db.shop.findUnique({
       where: { id: shop.id },
       include: {
-  program: true,
-  pointRules: {
-    orderBy: { sortOrder: 'asc' }
-  }
-}
-
+        program: true,
+        pointRules: {
+          orderBy: { sortOrder: 'asc' }
+        }
+      }
     });
 
     return json({
-  program: {
-    ...updatedShop!.program!,
-    pointRules: updatedShop!.pointRules,
-  },
-  currency: shop.currencyCode || 'USD',
-});
-
+      program: updatedShop!.program!,
+      pointRules: updatedShop!.pointRules,
+      currency: shop.currencyCode || 'USD',
+    });
   }
 
   return json({ 
     program: shop.program,
+    pointRules: shop.pointRules,
     currency: shop.currencyCode || 'USD'
   });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-    const { session } = await requireAdmin(request);
+  const { session } = await requireAdmin(request);
   const formData = await request.formData();
   
   // Handle point rules update
@@ -341,20 +330,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return redirect('/app/settings');
 };
 
-type LoaderData = {
-  program: ProgramSettings & {
-    pointRules: Array<{
-      id: number;
-      type: PointRuleType;
-      points: number;
-      description: string;
-      isActive: boolean;
-      sortOrder: number;
-    }>;
-  };
-  currency: string;
-};
-
 const PointRuleTypeLabels: Record<PointRuleType, string> = {
   PURCHASE: 'Purchase',
   SIGNUP: 'Signup',
@@ -365,7 +340,7 @@ const PointRuleTypeLabels: Record<PointRuleType, string> = {
 };
 
 export default function SettingsPage() {
-  const { program, currency } = useLoaderData<typeof loader>();
+  const { program, pointRules, currency } = useLoaderData<typeof loader>();
   const actionData = useActionData<{ errors?: Record<string, string> }>();
   
   // Initialize form state with program data
@@ -380,9 +355,9 @@ export default function SettingsPage() {
     earnOnShipping: program?.earnOnShipping || false,
   });
 
-  // Initialize point rules from program data
-  const [pointRules, setPointRules] = useState<PointRuleForm[]>(
-    program?.pointRules?.map(rule => ({
+  // Initialize point rules from loader data
+  const [pointRulesState, setPointRulesState] = useState<PointRuleForm[]>(
+    pointRules?.map((rule) => ({
       id: rule.id,
       type: rule.type,
       points: rule.points.toString(),
@@ -394,40 +369,40 @@ export default function SettingsPage() {
 
   // Handle point rule changes
   const handlePointRuleChange = (index: number, field: keyof PointRuleForm, value: any) => {
-    const updatedRules = [...pointRules];
+    const updatedRules = [...pointRulesState];
     updatedRules[index] = { ...updatedRules[index], [field]: value };
-    setPointRules(updatedRules);
+    setPointRulesState(updatedRules);
   };
 
   // Toggle rule active state
   const toggleRuleActive = (index: number) => {
-    const updatedRules = [...pointRules];
+    const updatedRules = [...pointRulesState];
     updatedRules[index].isActive = !updatedRules[index].isActive;
-    setPointRules(updatedRules);
+    setPointRulesState(updatedRules);
   };
 
   // Move rule up in the list
   const moveRuleUp = (index: number) => {
     if (index === 0) return;
-    const updatedRules = [...pointRules];
+    const updatedRules = [...pointRulesState];
     [updatedRules[index], updatedRules[index - 1]] = [updatedRules[index - 1], updatedRules[index]];
     // Update sort orders
     updatedRules.forEach((rule, i) => {
       rule.sortOrder = i;
     });
-    setPointRules(updatedRules);
+    setPointRulesState(updatedRules);
   };
 
   // Move rule down in the list
   const moveRuleDown = (index: number) => {
-    if (index === pointRules.length - 1) return;
-    const updatedRules = [...pointRules];
+    if (index === pointRulesState.length - 1) return;
+    const updatedRules = [...pointRulesState];
     [updatedRules[index], updatedRules[index + 1]] = [updatedRules[index + 1], updatedRules[index]];
     // Update sort orders
     updatedRules.forEach((rule, i) => {
       rule.sortOrder = i;
     });
-    setPointRules(updatedRules);
+    setPointRulesState(updatedRules);
   };
 
   // Handle point rules form submission
@@ -437,7 +412,7 @@ export default function SettingsPage() {
     const formData = new FormData();
     formData.append('_action', 'updatePointRules');
     
-    pointRules.forEach((rule, index) => {
+    pointRulesState.forEach((rule) => {
       formData.append(`rule_${rule.type}_points`, rule.points);
       formData.append(`rule_${rule.type}_description`, rule.description);
       formData.append(`rule_${rule.type}_active`, rule.isActive ? 'on' : 'off');
@@ -452,6 +427,7 @@ export default function SettingsPage() {
       
       if (response.ok) {
         // Show success message or update UI as needed
+        console.log('Point rules updated successfully');
       } else {
         // Handle error
         console.error('Failed to update point rules');
@@ -571,7 +547,7 @@ export default function SettingsPage() {
                       type="checkbox"
                       name="excludeDiscounts"
                       checked={formData.excludeDiscounts}
-                      onChange={(e) => handleTextFieldChange(e.target.checked ? 'true' : 'false', 'excludeDiscounts')}
+                      onChange={(e) => setFormData(prev => ({ ...prev, excludeDiscounts: e.target.checked }))}
                       style={{ width: '1rem', height: '1rem' }}
                     />
                     <Text as="span" variant="bodyMd">Exclude discounts from point calculations</Text>
@@ -587,7 +563,7 @@ export default function SettingsPage() {
                       type="checkbox"
                       name="earnOnShipping"
                       checked={formData.earnOnShipping}
-                      onChange={(e) => handleTextFieldChange(e.target.checked ? 'true' : 'false', 'earnOnShipping')}
+                      onChange={(e) => setFormData(prev => ({ ...prev, earnOnShipping: e.target.checked }))}
                       style={{ width: '1rem', height: '1rem' }}
                     />
                     <Text as="span" variant="bodyMd">Award points on shipping costs</Text>
@@ -622,7 +598,7 @@ export default function SettingsPage() {
                   <DataTable
                     columnContentTypes={['text', 'text', 'text', 'text', 'text']}
                     headings={['Rule', 'Points', 'Description', 'Status', 'Actions']}
-                    rows={pointRules
+                    rows={pointRulesState
                       .sort((a, b) => a.sortOrder - b.sortOrder)
                       .map((rule, index) => [
                       PointRuleTypeLabels[rule.type],
@@ -670,7 +646,7 @@ export default function SettingsPage() {
                             <Button
                               size="slim"
                               onClick={() => moveRuleDown(index)}
-                              disabled={index === pointRules.length - 1}
+                              disabled={index === pointRulesState.length - 1}
                               icon={<Icon source={ArrowDownIcon} />}
                             />
                           </ButtonGroup>
