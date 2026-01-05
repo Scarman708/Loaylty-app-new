@@ -2,7 +2,7 @@
 
 client_id = "dfc8d1577fe2dd02468f13585c3f6ce1"
 name = "test-app"
-application_url = ""
+application_url = "https://example.com"
 embedded = true
 
 [build]
