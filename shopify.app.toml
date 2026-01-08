@@ -34,7 +34,7 @@ optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ "https://loaylty-app-new.onrender.com/api/auth" ]
+redirect_urls = [ "https://loaylty-app-new.onrender.com/auth/callback" ]
 
 [app_proxy]
 url = "https://focusing-lab-heather-arguments.trycloudflare.com"
