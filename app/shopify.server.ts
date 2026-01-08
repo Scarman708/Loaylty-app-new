@@ -17,6 +17,7 @@ export const shopify = shopifyApp({
   appUrl: process.env.SHOPIFY_APP_URL!,
   apiVersion: LATEST_API_VERSION,
   isEmbeddedApp: true,
+  authPathPrefix: '/auth',
 
   scopes: (process.env.SCOPES ??
     'read_orders,write_orders,read_customers,write_customers,write_content')
