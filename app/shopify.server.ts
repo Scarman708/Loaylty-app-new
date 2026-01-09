@@ -23,6 +23,11 @@ export const shopify = shopifyApp({
   apiVersion: LATEST_API_VERSION,
   isEmbeddedApp: true,
   authPathPrefix: '/auth',
+  useOnlineTokens: false,
+
+   future: {
+    unstable_newEmbeddedAuthStrategy: true,
+  },
 
   scopes: (process.env.SCOPES ??
     'read_orders,write_orders,read_customers,write_customers,write_content')
