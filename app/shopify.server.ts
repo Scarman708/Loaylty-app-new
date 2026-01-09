@@ -115,6 +115,7 @@ export const authenticate = {
   public: shopify.authenticate.public,
   webhook: shopify.authenticate.webhook,
 };
+export const authenticate = shopify.authenticate;
 export const addDocumentRequestHeaders =
   shopify.addDocumentResponseHeaders;
 
