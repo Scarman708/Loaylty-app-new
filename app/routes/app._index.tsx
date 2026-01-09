@@ -17,9 +17,11 @@ import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-
-  return null;
+  const { session } = await authenticate.admin(request);
+  
+  return json({
+    shop: session.shop,
+  });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
