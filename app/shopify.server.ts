@@ -115,7 +115,7 @@ export const authenticate = {
   public: shopify.authenticate.public,
   webhook: shopify.authenticate.webhook,
 };
-export const authenticate = shopify.authenticate;
+// Custom authenticate implementation is used instead of the default one
 export const addDocumentRequestHeaders =
   shopify.addDocumentResponseHeaders;
 
