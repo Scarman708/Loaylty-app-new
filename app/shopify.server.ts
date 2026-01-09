@@ -10,13 +10,24 @@ import {
 import { PrismaSessionStorage } from '@shopify/shopify-app-session-storage-prisma';
 import prisma from '~/db.server';
 
-
+console.log('🔧 Shopify Config:', {
+  apiKey: process.env.SHOPIFY_API_KEY,
+  appUrl: process.env.SHOPIFY_APP_URL,
+  hasSecret: !!process.env.SHOPIFY_API_SECRET,
+  nodeEnv: process.env.NODE_ENV,
+});
 export const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY!,
   apiSecretKey: process.env.SHOPIFY_API_SECRET!,
   appUrl: process.env.SHOPIFY_APP_URL!,
   apiVersion: LATEST_API_VERSION,
   isEmbeddedApp: true,
+  authPathPrefix: '/auth',
+  useOnlineTokens: false,
+
+   future: {
+    unstable_newEmbeddedAuthStrategy: true,
+  },
 
   scopes: (process.env.SCOPES ??
     'read_orders,write_orders,read_customers,write_customers,write_content')
@@ -104,6 +115,7 @@ export const authenticate = {
   public: shopify.authenticate.public,
   webhook: shopify.authenticate.webhook,
 };
+export const authenticate = shopify.authenticate;
 export const addDocumentRequestHeaders =
   shopify.addDocumentResponseHeaders;
 
