@@ -5,13 +5,13 @@ import { LedgerReason, LedgerSource, LedgerStatus } from "@prisma/client";
 
 const db = new PrismaClient();
 
-
-// This webhook is triggered when a new order is created in the store
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop, payload } = await authenticate.webhook(request);
   
   try {
     const order = payload as any;
+    
+    console.log(`=== ORDERS_CREATE webhook received for order ${order.name || order.id} ===`);
     
     // Skip if it's a test order or if there's no customer
     if (order.test || !order.customer) {
@@ -19,26 +19,52 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response(null, { status: 200 });
     }
 
-    console.log(`Processing order ${order.id} from ${shop}`);
+    // Get shop from database using the shop domain
+    const shopDomain = shop.replace("https://", "").replace("/", "");
+    const shopRecord = await db.shop.findUnique({
+      where: { shopDomain },
+    });
+
+    if (!shopRecord) {
+      console.error('Shop not found in database:', shopDomain);
+      return new Response('Shop not found', { status: 404 });
+    }
+
+    console.log(`Processing order for shop: ${shopDomain} (ID: ${shopRecord.id})`);
+
+    // Extract order ID (handle both formats)
+    const orderIdString = order.id?.toString() || '';
+    const orderId = orderIdString.includes('gid://') 
+      ? BigInt(orderIdString.replace("gid://shopify/Order/", ""))
+      : BigInt(order.id || 0);
 
     // Check if we've already processed this order
     const existingLedger = await db.pointLedger.findFirst({
       where: { 
-        orderId: order.id.toString(),
+        orderId: orderId,
+        shopId: shopRecord.id,
         reason: LedgerReason.EARN
       },
     });
 
     if (existingLedger) {
-      console.log(`Order ${order.id} already processed for points`);
+      console.log(`Order ${orderId} already processed for points`);
       return new Response(null, { status: 200 });
     }
+
+    // Extract customer ID (handle both formats)
+    const customerIdString = order.customer?.id?.toString() || '';
+    const customerId = customerIdString.includes('gid://') 
+      ? BigInt(customerIdString.replace("gid://shopify/Customer/", ""))
+      : BigInt(order.customer?.id || 0);
+
+    console.log(`Looking for customer ID: ${customerId}`);
 
     // Find or create the customer in our database
     let customer = await db.customer.findFirst({
       where: {
-        shopCustomerId: order.customer?.id ? BigInt(order.customer.id) : undefined,
-        shopId: parseInt(order.shop_id)
+        shopCustomerId: customerId,
+        shopId: shopRecord.id
       }
     });
 
@@ -46,8 +72,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!customer && order.customer) {
       customer = await db.customer.create({
         data: {
-          shopId: parseInt(order.shop_id),
-          shopCustomerId: order.customer?.id ? BigInt(order.customer.id) : BigInt(0),
+          shopId: shopRecord.id,
+          shopCustomerId: customerId,
           email: order.customer.email || null,
           acceptsMarketing: order.customer.accepts_marketing || false,
           pointBalance: 0,
@@ -63,13 +89,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Get point rules for this shop
     const pointRules = await db.pointRule.findMany({
       where: {
-        shopId: parseInt(order.shop_id),
+        shopId: shopRecord.id,
         isActive: true,
       },
       orderBy: { sortOrder: 'asc' },
     });
 
-    // Find the purchase rule (assuming there's only one active purchase rule)
+    // Find the purchase rule
     const purchaseRule = pointRules.find(rule => rule.isActive);
     
     if (!purchaseRule) {
@@ -81,6 +107,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const orderTotal = parseFloat(order.total_price || '0');
     const pointsToAward = Math.floor(orderTotal * purchaseRule.points);
 
+    console.log(`Order total: $${orderTotal}, Points to award: ${pointsToAward} (rate: ${purchaseRule.points})`);
+
     if (pointsToAward <= 0) {
       console.log('No points to award for order:', order.id);
       return new Response(null, { status: 200 });
@@ -89,15 +117,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Create a pending ledger entry
     await db.pointLedger.create({
       data: {
-        shopId: parseInt(order.shop_id),
+        shopId: shopRecord.id,
         customerId: customer.id,
         delta: pointsToAward,
-        reason: LedgerReason.EARN as any, // Using 'as any' to bypass type checking
+        reason: LedgerReason.EARN,
         source: LedgerSource.ORDER,
-        orderId: BigInt(order.id.replace("gid://shopify/Order/", "")),
-        orderName: order.name,
+        orderId: orderId,
+        orderName: order.name || order.order_number?.toString(),
         status: LedgerStatus.PENDING,
-        // availableAt will be set when order is fulfilled
         metadata: {
           orderTotal: order.total_price,
           customerEmail: order.customer?.email,
@@ -107,6 +134,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       },
     });
+
+    console.log(`✅ Created PENDING ledger entry for ${pointsToAward} points`);
 
     // Check if this customer was referred by someone
     const referringCustomer = await db.customer.findFirst({
@@ -121,42 +150,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // If there's a referring customer, award them points
     if (referringCustomer) {
-      // Award 10% of the points to the referring customer (or adjust the percentage as needed)
       const referralPoints = Math.ceil(pointsToAward * 0.1);
       
-      await db.customer.update({
-        where: { id: referringCustomer.id },
-        data: {
-          pointBalance: {
-            increment: referralPoints,
+      await db.$transaction([
+        db.customer.update({
+          where: { id: referringCustomer.id },
+          data: {
+            pointBalance: { increment: referralPoints },
+            lifetimePoints: { increment: referralPoints },
           },
-          lifetimePoints: {
-            increment: referralPoints,
+        }),
+        db.pointLedger.create({
+          data: {
+            shopId: shopRecord.id,
+            customerId: referringCustomer.id,
+            delta: referralPoints,
+            reason: LedgerReason.REFERRAL_BONUS,
+            source: LedgerSource.REFERRAL,
+            orderId: orderId,
+            orderName: order.name || order.order_number?.toString(),
+            status: LedgerStatus.AVAILABLE,
+            availableAt: new Date(),
+            metadata: {
+              referredCustomerId: customer.id,
+              referredOrderId: orderId.toString(),
+              orderTotal: order.total_price
+            },
           },
-        },
-      });
+        }),
+      ]);
 
-      console.log(`✅ Awarded ${referralPoints} referral points to customer ${referringCustomer.id} for referring order ${order.id}`);
-      
-      // Create a ledger entry for the referral bonus
-      await db.pointLedger.create({
-        data: {
-          shopId: parseInt(order.shop_id),
-          customerId: referringCustomer.id,
-          delta: referralPoints,
-          reason: LedgerReason.REFERRAL_BONUS, // Make sure this enum value exists in your schema
-          source: LedgerSource.REFERRAL,
-          orderId: order.id.toString(),
-          orderName: order.name,
-          status: 'AVAILABLE',
-          availableAt: new Date(),
-          metadata: {
-            referredCustomerId: customer.id,
-            referredOrderId: order.id,
-            orderTotal: order.total_price
-          },
-        },
-      });
+      console.log(`✅ Awarded ${referralPoints} referral points to customer ${referringCustomer.id}`);
     }
 
     return new Response(null, { status: 200 });
