@@ -48,6 +48,21 @@ export const shopify = shopifyApp({
     afterAuth: async ({ session, admin }) => {
       console.log("🔥 afterAuth FIRED for", session.shop);
       try {
+         await prisma.shop.upsert({
+        where: { shopDomain: session.shop },
+        update: {
+          accessToken: session.accessToken,
+          status: 'ACTIVE',
+        },
+        create: {
+          shopDomain: session.shop,
+          accessToken: session.accessToken,
+          status: 'ACTIVE',
+          // Add any other required fields from your schema
+        },
+      });
+      console.log("✅ Shop saved to database");
+      
         await shopify.registerWebhooks({ session });
         console.log("✅ Webhooks registered");
 
