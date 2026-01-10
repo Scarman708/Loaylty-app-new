@@ -2,6 +2,7 @@ import { json } from "@remix-run/node";
 import prisma from "~/db.server";
 import type { ActionFunctionArgs } from "@remix-run/node";
 import crypto from "crypto";
+import { syncCustomerToShopify } from "~/utils/shopifyCustomer.server";
 
 const corsHeaders = (origin: string) => ({
   'Access-Control-Allow-Origin': origin,
@@ -250,6 +251,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       }
     });
+    await syncCustomerToShopify(shop, customer.id.toString());
 
     console.log("✅ Customer created successfully!");
     console.log("   - Customer DB ID:", customer.id);

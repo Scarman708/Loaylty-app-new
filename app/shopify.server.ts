@@ -5,6 +5,8 @@ import {
   LATEST_API_VERSION,
   ApiVersion,
 } from '@shopify/shopify-app-remix/server';
+import { setupLoyaltyMetafields } from "~/utils/shopifyMetafields.server";
+
 
 import { PrismaSessionStorage } from '@shopify/shopify-app-session-storage-prisma';
 import prisma from '~/db.server';
@@ -62,10 +64,12 @@ export const shopify = shopifyApp({
         },
       });
       console.log("✅ Shop saved to database");
-      
+
         await shopify.registerWebhooks({ session });
         console.log("✅ Webhooks registered");
-
+ await setupLoyaltyMetafields(session.shop);
+      console.log("✅ Loyalty metafields set up");
+     
         const response = await admin.rest.post({
           path: 'pages',
           data: {
