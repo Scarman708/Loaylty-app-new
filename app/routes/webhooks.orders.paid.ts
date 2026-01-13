@@ -1,20 +1,20 @@
-// app/routes/webhooks.orders.fulfilled.ts
-// Handles ORDERS_FULFILLED webhook - converts PENDING ledger to AVAILABLE
+// app/routes/webhooks.orders.paid.ts
+// Handles ORDERS_PAID webhook - converts PENDING ledger to AVAILABLE when holdEvent is PAID
 
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { PrismaClient } from "@prisma/client";
-import { LedgerReason, LedgerSource, LedgerStatus, EarnHoldEvent } from "@prisma/client";
+import { LedgerSource, LedgerStatus, EarnHoldEvent } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop, payload } = await authenticate.webhook(request);
   
-  console.log('=== ORDERS_FULFILLED webhook received ===');
+  console.log('=== ORDERS_PAID webhook received ===');
   
-  if (topic !== "ORDERS_FULFILLED") {
+  if (topic !== "ORDERS_PAID") {
     return json({ success: false, error: "Invalid topic" }, { status: 400 });
   }
 
@@ -22,7 +22,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const order = payload as any;
     const shopDomain = shop.replace("https://", "").replace("/", "");
     
-    console.log(`Processing fulfilled order ${order.name || order.id} for shop ${shopDomain}`);
+    console.log(`Processing paid order ${order.name || order.id} for shop ${shopDomain}`);
     
     // Find the shop in our database
     const shopData = await prisma.shop.findUnique({
@@ -40,10 +40,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ success: false, error: "Program settings not configured" }, { status: 404 });
     }
 
-    // FIX: Only process if holdEvent is FULFILLED
-    if (shopData.program.holdEvent !== EarnHoldEvent.FULFILLED) {
-      console.log(`Skipping - holdEvent is ${shopData.program.holdEvent}, not FULFILLED`);
-      return json({ success: true, skipped: true, reason: 'holdEvent not FULFILLED' }, { status: 200 });
+    // Only process if holdEvent is PAID
+    if (shopData.program.holdEvent !== EarnHoldEvent.PAID) {
+      console.log(`Skipping - holdEvent is ${shopData.program.holdEvent}, not PAID`);
+      return json({ success: true, skipped: true, reason: 'holdEvent not PAID' }, { status: 200 });
     }
 
     // Extract customer ID (handle both GID and numeric formats)
@@ -69,14 +69,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     console.log(`Customer found: ${customer.id}`);
 
-    // FIX: Find the pending ledger entry for this order (with SOURCE filter)
+    // Find the pending ledger entry for this order
     const pendingLedger = await prisma.pointLedger.findFirst({
       where: {
         shopId: shopData.id,
         customerId: customer.id,
         orderId: orderId,
         status: LedgerStatus.PENDING,
-        source: LedgerSource.ORDER, // FIX: Added source filter
+        source: LedgerSource.ORDER,
       },
     });
 
@@ -108,14 +108,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     } else {
       console.log('No PENDING ledger found');
       
-      // FIX: Check if points were already awarded (AVAILABLE status)
+      // Check if points were already awarded (AVAILABLE status)
       const existingLedger = await prisma.pointLedger.findFirst({
         where: {
           shopId: shopData.id,
           customerId: customer.id,
           orderId: orderId,
           status: LedgerStatus.AVAILABLE,
-          source: LedgerSource.ORDER, // FIX: Added source filter
+          source: LedgerSource.ORDER,
         }
       });
 
@@ -124,16 +124,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ success: true, alreadyProcessed: true });
       }
 
-      // No ledger exists at all - ORDERS_CREATE may have failed
       console.warn('⚠️ No ledger entry found for this order. ORDERS_CREATE webhook may have failed.');
-      
-      // FIX: Fallback - create points directly (order is already fulfilled)
-      const result = await processOrderForPointsFallback(shopData, customer, order, orderId);
-      return json({ success: true, fallbackUsed: true, pointsAwarded: result });
+      return json({ success: true, noLedgerFound: true });
     }
 
   } catch (error) {
-    console.error("❌ Error processing order fulfillment:", error);
+    console.error("❌ Error processing order payment:", error);
     console.error('Error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
@@ -141,72 +137,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 };
-
-// FIX: Fallback function - creates points if ORDERS_CREATE failed
-async function processOrderForPointsFallback(shop: any, customer: any, order: any, orderId: bigint) {
-  console.log('→ FALLBACK: Processing order for points (no pending ledger found)');
-  
-  if (!shop.program) {
-    console.error('No program settings found for shop');
-    throw new Error("No program settings found");
-  }
-
-  // FIX: Calculate points based on order total using program (CONSISTENT)
-  const orderTotal = parseFloat(order.total_price || '0');
-  const pointsToAward = Math.floor(orderTotal * shop.program.pointsPerCurrency);
-
-  console.log(`Calculating points: $${orderTotal} * ${shop.program.pointsPerCurrency} = ${pointsToAward} points`);
-
-  if (pointsToAward <= 0) {
-    console.log('No points to award for order:', order.id);
-    return 0;
-  }
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      // Create the ledger entry as AVAILABLE (order is already fulfilled)
-      await tx.pointLedger.create({
-        data: {
-          shopId: shop.id,
-          customerId: customer.id,
-          delta: pointsToAward,
-          reason: LedgerReason.EARN,
-          source: LedgerSource.ORDER,
-          status: LedgerStatus.AVAILABLE,
-          orderId: orderId,
-          orderName: order.name || order.order_number?.toString(),
-          availableAt: new Date(),
-          metadata: {
-            orderTotal: order.total_price,
-            customerEmail: order.customer?.email,
-            orderCreatedAt: order.created_at,
-            pointsPerCurrency: shop.program.pointsPerCurrency,
-            calculatedPoints: pointsToAward,
-            orderStatus: 'fulfilled',
-            createdByFallback: true // Flag this as created by fallback
-          },
-        },
-      });
-
-      // Update customer's points
-      await tx.customer.update({
-        where: { id: customer.id },
-        data: {
-          pointBalance: { increment: pointsToAward },
-          lifetimePoints: { increment: pointsToAward },
-          lastEarnedAt: new Date(),
-        },
-      });
-
-      console.log(`✅ FALLBACK: Successfully awarded ${pointsToAward} points for order ${orderId}`);
-    });
-    
-    return pointsToAward;
-  } catch (error) {
-    console.error('❌ Error in fallback processing:', error);
-    throw error;
-  }
-}
 
 // Helper function to extract numeric ID from GID format or plain number
 function extractId(id: any, type: string): bigint {
