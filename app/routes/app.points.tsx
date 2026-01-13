@@ -250,7 +250,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 };
 
-export default function CustomerPoints() {
+export default function CustomerPointsPage() {
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
 
