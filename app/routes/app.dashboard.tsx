@@ -1,11 +1,9 @@
 import { json, LoaderFunctionArgs } from '@remix-run/node';
-import { Link } from '@remix-run/react';
-import { useLoaderData } from '@remix-run/react';
+import { Link, useLoaderData } from '@remix-run/react';
 import { Card, Layout, Page, DataTable, Text, BlockStack, InlineStack, Box, Divider } from '@shopify/polaris';
 import { TitleBar } from '@shopify/app-bridge-react';
-import { authenticate,shopify } from '../shopify.server';
+import { authenticate, shopify } from '../shopify.server';
 import db from '../db.server';
-import { useState } from 'react';
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -13,19 +11,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw new Response('Authentication failed', { status: 401 });
   }
   const shop = session.shop;
-const { admin } = await shopify.authenticate.admin(request);
+  const { admin } = await shopify.authenticate.admin(request);
 
-   const ordersResponse = await admin.graphql(
+  // Fetch recent orders from Shopify
+  const ordersResponse = await admin.graphql(
     `#graphql
       query GetRecentOrders($first: Int!) {
-        orders(first: $first) {
+        orders(first: $first, sortKey: PROCESSED_AT, reverse: true) {
           edges {
             node {
               id
               name
               processedAt
               totalPriceSet {
-                shopMoney{
+                shopMoney {
                   amount
                   currencyCode
                 }
@@ -45,16 +44,23 @@ const { admin } = await shopify.authenticate.admin(request);
     `,
     {
       variables: {
-        first: 20, // Get last 20 orders
+        first: 20,
       },
     }
   );
+  
   const ordersData = await ordersResponse.json();
   const recentOrders = ordersData.data?.orders?.edges?.map((edge: any) => ({
-    ...edge.node,
+    id: edge.node.id,
+    name: edge.node.name,
+    processedAt: edge.node.processedAt,
+    total: edge.node.totalPriceSet?.shopMoney?.amount || '0',
+    currency: edge.node.totalPriceSet?.shopMoney?.currencyCode || 'USD',
+    status: edge.node.displayFulfillmentStatus,
+    customerName: edge.node.customer?.displayName || 'Guest',
+    customerEmail: edge.node.customer?.email || 'N/A',
     pointsAwarded: edge.node.metafield?.value ? parseInt(edge.node.metafield.value) : null,
   })) || [];
-
 
   // Get shop data
   const shopData = await db.shop.findUnique({
@@ -89,7 +95,7 @@ const { admin } = await shopify.authenticate.admin(request);
   const recentActivity = await db.pointLedger.findMany({
     where: { shopId: shopData.id },
     orderBy: { createdAt: 'desc' },
-    take: 5,
+    take: 10,
     include: { customer: true },
   });
 
@@ -100,6 +106,7 @@ const { admin } = await shopify.authenticate.admin(request);
       ledgers: true,
       currentTier: true,
     },
+    orderBy: { lifetimePoints: 'desc' },
   });
 
   // Get all tiers for this shop
@@ -110,7 +117,7 @@ const { admin } = await shopify.authenticate.admin(request);
 
   // Process customer data with additional details
   const customerList = customersWithDetails.map(customer => {
-    const totalPoints = customer.lifetimePoints; // Using lifetimePoints from the customer model
+    const totalPoints = customer.lifetimePoints;
     const joinDate = customer.createdAt;
     
     // Determine tier based on points or use current tier
@@ -125,14 +132,18 @@ const { admin } = await shopify.authenticate.admin(request);
       }
     }
 
+    // Count orders from ledgers (each EARN entry could represent an order)
+    const orderCount = customer.ledgers.filter(l => l.reason === 'EARN').length;
+
     return {
       id: customer.id,
       email: customer.email || 'No email',
       name: customer.email?.split('@')[0] || 'Customer',
       points: totalPoints,
+      currentBalance: customer.pointBalance,
       tier: customerTier,
-      joinDate: joinDate,
-      orderCount: 0, // Not directly available in the schema
+      joinDate: joinDate.toISOString(),
+      orderCount: orderCount,
       lastOrder: customer.lastEarnedAt || customer.lastRedeemedAt || null,
     };
   });
@@ -141,7 +152,7 @@ const { admin } = await shopify.authenticate.admin(request);
     shop: {
       name: shop,
       currency: shopData.currencyCode || 'USD',
-      createdAt: shopData.installedAt,
+      createdAt: shopData.installedAt?.toISOString() || new Date().toISOString(),
     },
     program: shopData.program,
     stats: {
@@ -151,19 +162,24 @@ const { admin } = await shopify.authenticate.admin(request);
       totalPointsRedeemed,
       activePoints: totalPointsEarned - totalPointsRedeemed,
     },
-    tiers: shopData.tiers,
+    tiers: shopData.tiers.map(tier => ({
+      id: tier.id,
+      name: tier.name,
+      minPoints: tier.minPoints,
+      multiplier: tier.multiplier ?? 1,
+    })),
     recentActivity: recentActivity.map(activity => ({
       id: activity.id,
       customer: activity.customer?.email || 'Unknown',
       points: activity.delta,
       reason: activity.reason,
-      createdAt: activity.createdAt,
+      createdAt: activity.createdAt.toISOString(),
     })),
     customers: customerList,
+    recentOrders: recentOrders,
   });
 };
 
-const [selectedTab, setSelectedTab] = useState<'overview' | 'customers' | 'orders'>('overview');
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -174,16 +190,23 @@ const formatDate = (dateString: string) => {
   });
 };
 
+const formatCurrency = (amount: string | number, currency: string) => {
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency,
+  }).format(numAmount);
+};
 
 export default function DashboardPage() {
-  const { shop, program, stats, tiers, recentActivity, customers } = useLoaderData<typeof loader>();
+  const { shop, program, stats, tiers, recentActivity, customers, recentOrders } = useLoaderData<typeof loader>();
 
   return (
     <Page>
       <TitleBar title="Loyalty Dashboard" />
       
-      {/* Program Summary */}
       <Layout>
+        {/* Program Summary */}
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
@@ -199,66 +222,111 @@ export default function DashboardPage() {
                   <Text as="p" variant="headingXl">{stats.totalCustomers}</Text>
                 </Box>
                 <Box minWidth="200px">
-                  <Text as="p" variant="bodyMd" tone="subdued">Active Points</Text>
-                  <Text as="p" variant="headingXl">{stats.activePoints.toLocaleString()}</Text>
+                  <Text as="p" variant="bodyMd" tone="subdued">Active Customers</Text>
+                  <Text as="p" variant="headingXl">{stats.activeCustomers}</Text>
                 </Box>
                 <Box minWidth="200px">
-                  <Text as="p" variant="bodyMd" tone="subdued">Total Points Earned</Text>
-                  <Text as="p" variant="headingXl">{stats.totalPointsEarned.toLocaleString()}</Text>
+                  <Text as="p" variant="bodyMd" tone="subdued">Active Points</Text>
+                  <Text as="p" variant="headingXl">{stats.activePoints.toLocaleString()}</Text>
                 </Box>
               </InlineStack>
             </BlockStack>
           </Card>
         </Layout.Section>
 
+        {/* Two Column Layout */}
         <Layout.Section variant="oneThird">
+          {/* Program Settings Card */}
           <Card>
             <BlockStack gap="400">
-              <Text as="h3" variant="headingMd">Program Settings</Text>
+              <InlineStack align="space-between">
+                <Text as="h3" variant="headingMd">Program Settings</Text>
+                <Link to="/app/settings">
+                  <Text as="span" variant="bodyMd" tone="magic">Edit</Text>
+                </Link>
+              </InlineStack>
               <Divider />
               <BlockStack gap="200">
-                <Text as="p"><strong>Points per {shop.currency}:</strong> {program?.pointsPerCurrency}</Text>
+                <Text as="p"><strong>Points per {shop.currency}:</strong> {program?.pointsPerCurrency || 0}</Text>
                 <Text as="p"><strong>Rounding:</strong> {program?.rounding || 'None'}</Text>
                 <Text as="p"><strong>Exclude Discounts:</strong> {program?.excludeDiscounts ? 'Yes' : 'No'}</Text>
                 <Text as="p"><strong>Earn on Shipping:</strong> {program?.earnOnShipping ? 'Yes' : 'No'}</Text>
-                <Text as="p"><strong>Min. Order Value:</strong> {program?.minSubtotalCents ? `$${(program.minSubtotalCents / 100).toFixed(2)}` : 'None'}</Text>
-              </BlockStack>
-            </BlockStack>
-          </Card>
-
-          <Card>
-            <BlockStack gap="400">
-              <Text as="h3" variant="headingMd">Tiers</Text>
-              <Divider />
-              <BlockStack gap="200">
-                {tiers && tiers.length > 0 ? (
-                  tiers.map(tier => (
-                    <Box key={tier.id} paddingBlockEnd="200">
-                      <Text as="p" variant="bodyMd"><strong>{tier.name}</strong> (from {tier.minPoints} points)</Text>
-                    </Box>
-                  ))
-                ) : (
-                  <Text as="p" variant="bodyMd" tone="subdued">No tiers configured</Text>
+                <Text as="p"><strong>Min. Order Value:</strong> {program?.minSubtotalCents ? `${shop.currency} ${(program.minSubtotalCents / 100).toFixed(2)}` : 'None'}</Text>
+                {program?.maxPointsPerOrder && (
+                  <Text as="p"><strong>Max Points/Order:</strong> {program.maxPointsPerOrder}</Text>
                 )}
               </BlockStack>
             </BlockStack>
           </Card>
+
+          {/* Tiers Card */}
+          <Box paddingBlockStart="400">
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between">
+                  <Text as="h3" variant="headingMd">Tiers</Text>
+                  <Link to="/app/tiers">
+                    <Text as="span" variant="bodyMd" tone="magic">Manage</Text>
+                  </Link>
+                </InlineStack>
+                <Divider />
+                <BlockStack gap="200">
+                  {tiers && tiers.length > 0 ? (
+                    tiers.map(tier => (
+                      <Box key={tier.id} paddingBlockEnd="200">
+                        <Text as="p" variant="bodyMd">
+                          <strong>{tier.name}</strong> - {tier.minPoints}+ points
+                          {tier.multiplier && tier.multiplier !== 1 && (
+                            <Text as="span" tone="subdued"> ({tier.multiplier}x multiplier)</Text>
+                          )}
+                        </Text>
+                      </Box>
+                    ))
+                  ) : (
+                    <Text as="p" variant="bodyMd" tone="subdued">No tiers configured</Text>
+                  )}
+                </BlockStack>
+              </BlockStack>
+            </Card>
+          </Box>
+
+          {/* Points Statistics */}
+          <Box paddingBlockStart="400">
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h3" variant="headingMd">Points Statistics</Text>
+                <Divider />
+                <BlockStack gap="200">
+                  <Text as="p"><strong>Total Earned:</strong> {stats.totalPointsEarned.toLocaleString()} pts</Text>
+                  <Text as="p"><strong>Total Redeemed:</strong> {stats.totalPointsRedeemed.toLocaleString()} pts</Text>
+                  <Text as="p"><strong>Outstanding:</strong> {stats.activePoints.toLocaleString()} pts</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Redemption rate: {stats.totalPointsEarned > 0 
+                      ? ((stats.totalPointsRedeemed / stats.totalPointsEarned) * 100).toFixed(1)
+                      : 0}%
+                  </Text>
+                </BlockStack>
+              </BlockStack>
+            </Card>
+          </Box>
         </Layout.Section>
 
+        {/* Main Content Column */}
         <Layout.Section>
+          {/* Recent Activity */}
           <Card>
             <BlockStack gap="400">
               <Text as="h3" variant="headingMd">Recent Activity</Text>
               <Divider />
               {recentActivity.length > 0 ? (
                 <DataTable
-                  columnContentTypes={['text', 'text', 'text', 'text']}
+                  columnContentTypes={['text', 'numeric', 'text', 'text']}
                   headings={['Customer', 'Points', 'Action', 'Date']}
                   rows={recentActivity.map(activity => [
                     activity.customer,
-                    activity.points > 0 ? `+${activity.points}` : activity.points,
+                    activity.points > 0 ? `+${activity.points}` : activity.points.toString(),
                     activity.reason,
-                    new Date(activity.createdAt).toLocaleString(),
+                    formatDate(activity.createdAt),
                   ])}
                 />
               ) : (
@@ -266,36 +334,64 @@ export default function DashboardPage() {
               )}
             </BlockStack>
           </Card>
-        </Layout.Section>
 
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="400">
-              <Text as="h3" variant="headingMd">Customer Loyalty Details</Text>
-              <Divider />
-              {customers && customers.length > 0 ? (
-                <DataTable
-                  columnContentTypes={['text', 'text', 'text', 'numeric', 'numeric', 'text', 'text']}
-                  headings={['Name', 'Email', 'Tier', 'Points', 'Orders', 'Join Date', 'Last Order']}
-                  rows={customers.map(customer => [
-                    customer.name,
-                    customer.email,
-                    customer.tier,
-                    customer.points,
-                    customer.orderCount,
-                    new Date(customer.joinDate).toLocaleDateString(),
-                    customer.lastOrder ? new Date(customer.lastOrder).toLocaleDateString() : 'N/A',
-                  ])}
-                  sortable={[true, true, true, true, true, true, true]}
-                  initialSortColumnIndex={3}
-                  defaultSortDirection="descending"
-                  footerContent={`Showing ${customers.length} customers`}
-                />
-              ) : (
-                <Text as="p" variant="bodyMd" tone="subdued">No customer data available</Text>
-              )}
-            </BlockStack>
-          </Card>
+          {/* Recent Orders */}
+          {recentOrders.length > 0 && (
+            <Box paddingBlockStart="400">
+              <Card>
+                <BlockStack gap="400">
+                  <Text as="h3" variant="headingMd">Recent Orders</Text>
+                  <Divider />
+                  <DataTable
+                    columnContentTypes={['text', 'text', 'text', 'numeric', 'text', 'text']}
+                    headings={['Order', 'Customer', 'Total', 'Points', 'Status', 'Date']}
+                    rows={recentOrders.map((order: { name: any; customerName: any; total: string | number; currency: string; pointsAwarded: any; status: any; processedAt: string; }) => [
+                      order.name,
+                      order.customerName,
+                      formatCurrency(order.total, order.currency),
+                      order.pointsAwarded ? `+${order.pointsAwarded}` : 'N/A',
+                      order.status || 'Pending',
+                      formatDate(order.processedAt),
+                    ])}
+                  />
+                </BlockStack>
+              </Card>
+            </Box>
+          )}
+
+          {/* Customer Loyalty Details */}
+          <Box paddingBlockStart="400">
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between">
+                  <Text as="h3" variant="headingMd">Top Customers</Text>
+                  <Link to="/app/customers">
+                    <Text as="span" variant="bodyMd" tone="magic">View All</Text>
+                  </Link>
+                </InlineStack>
+                <Divider />
+                {customers && customers.length > 0 ? (
+                  <DataTable
+                    columnContentTypes={['text', 'text', 'text', 'numeric', 'numeric', 'text']}
+                    headings={['Name', 'Email', 'Tier', 'Lifetime Points', 'Current Balance', 'Join Date']}
+                    rows={customers.slice(0, 10).map(customer => [
+                      customer.name,
+                      customer.email,
+                      customer.tier,
+                      customer.points.toLocaleString(),
+                      customer.currentBalance.toLocaleString(),
+                      new Date(customer.joinDate).toLocaleDateString(),
+                    ])}
+                    sortable={[true, true, true, true, true, true]}
+                    defaultSortDirection="descending"
+                    footerContent={`Showing ${Math.min(10, customers.length)} of ${customers.length} customers`}
+                  />
+                ) : (
+                  <Text as="p" variant="bodyMd" tone="subdued">No customer data available</Text>
+                )}
+              </BlockStack>
+            </Card>
+          </Box>
         </Layout.Section>
       </Layout>
     </Page>

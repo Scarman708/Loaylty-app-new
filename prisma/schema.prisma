@@ -170,6 +170,7 @@ model Tier {
   windowDays         Int?
   downgradeGraceDays Int?
   benefits           Json?
+  multiplier         Float?
   sortOrder          Int            @default(100)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt

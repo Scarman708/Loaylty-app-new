@@ -1,6 +1,5 @@
 import { json, type ActionFunctionArgs, redirect } from '@remix-run/node';
-import { Form, useLoaderData, useActionData } from '@remix-run/react';
-import { useState } from 'react';
+import { Form, useLoaderData, useActionData, useNavigation } from '@remix-run/react';
 import { 
   Card, 
   Layout, 
@@ -16,6 +15,7 @@ import {
   Badge,
   Icon,
   ButtonGroup,
+  Banner,
 } from '@shopify/polaris';
 import { TitleBar } from '@shopify/app-bridge-react';
 import { authenticate } from '../shopify.server';
@@ -23,28 +23,7 @@ import db from '../db.server';
 import { ArrowUpIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { ProgramSettings, RoundingMode, PointRuleType, PointRule } from '@prisma/client';
 
-type PointRuleForm = {
-  id?: number;
-  type: PointRuleType;
-  points: string;
-  description: string;
-  isActive: boolean;
-  sortOrder: number;
-};
-
-// Types for our form data
-type SettingsFormData = {
-  pointsPerDollar: number;
-  minOrderValue: number;
-  earnOnShipping: boolean;
-  excludeDiscounts: boolean;
-  rounding: RoundingMode;
-  maxPointsPerOrder: number | null;
-  dailyEarnCap: number | null;
-  monthlyEarnCap: number | null;
-};
-
-const DEFAULT_POINT_RULES: Record<PointRuleType, Omit<PointRuleForm, 'id'>> = {
+const DEFAULT_POINT_RULES: Record<PointRuleType, { type: PointRuleType; points: string; description: string; isActive: boolean; sortOrder: number }> = {
   PURCHASE: {
     type: 'PURCHASE',
     points: '100',
@@ -115,19 +94,17 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (!shop.program) {
-    // Create default program settings and point rules
     await db.$transaction([
       db.programSettings.create({
         data: {
           shopId: shop.id,
-          pointsPerCurrency: 100, // Points per dollar
+          pointsPerCurrency: 100,
           rounding: 'nearest',
           minSubtotalCents: 0,
           earnOnShipping: false,
           excludeDiscounts: false,
         },
       }),
-      // Create default point rules
       ...Object.values(DEFAULT_POINT_RULES).map(rule => 
         db.pointRule.create({
           data: {
@@ -142,7 +119,6 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
       )
     ]);
 
-    // Refetch to get the program with point rules
     const updatedShop = await db.shop.findUnique({
       where: { id: shop.id },
       include: {
@@ -160,9 +136,7 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  // Ensure all default point rules exist
   const existingRuleTypes = new Set(shop.pointRules.map(r => r.type));
-
   const missingRules = Object.entries(DEFAULT_POINT_RULES)
     .filter(([type]) => !existingRuleTypes.has(type as PointRuleType))
     .map(([_, rule], index) => ({
@@ -187,7 +161,6 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
       )
     );
 
-    // Refetch with updated rules
     const updatedShop = await db.shop.findUnique({
       where: { id: shop.id },
       include: {
@@ -215,26 +188,71 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await requireAdmin(request);
   const formData = await request.formData();
+  const actionType = formData.get('_action');
   
-  // Handle point rules update
-  if (formData.get('_action') === 'updatePointRules') {
-    const shop = await db.shop.findUnique({ 
-      where: { shopDomain: session.shop },
-      include: { program: true }
+  const shop = await db.shop.findUnique({ 
+    where: { shopDomain: session.shop },
+    include: { program: true }
+  });
+  
+  if (!shop) {
+    throw new Response('Shop not found', { status: 404 });
+  }
+
+  // Handle point rule reordering
+  if (actionType === 'moveRuleUp' || actionType === 'moveRuleDown') {
+    const ruleId = parseInt(formData.get('ruleId') as string, 10);
+    const currentSortOrder = parseInt(formData.get('currentSortOrder') as string, 10);
+    
+    const allRules = await db.pointRule.findMany({
+      where: { shopId: shop.id },
+      orderBy: { sortOrder: 'asc' }
     });
     
-    if (!shop?.program) {
+    const targetSortOrder = actionType === 'moveRuleUp' ? currentSortOrder - 1 : currentSortOrder + 1;
+    const swapRule = allRules.find(r => r.sortOrder === targetSortOrder);
+    
+    if (swapRule) {
+      await db.$transaction([
+        db.pointRule.update({
+          where: { id: ruleId },
+          data: { sortOrder: targetSortOrder }
+        }),
+        db.pointRule.update({
+          where: { id: swapRule.id },
+          data: { sortOrder: currentSortOrder }
+        })
+      ]);
+    }
+    
+    return json({ success: true, message: 'Rule order updated' });
+  }
+
+  // Handle toggling rule active status
+  if (actionType === 'toggleRule') {
+    const ruleId = parseInt(formData.get('ruleId') as string, 10);
+    const currentActive = formData.get('currentActive') === 'true';
+    
+    await db.pointRule.update({
+      where: { id: ruleId },
+      data: { isActive: !currentActive }
+    });
+    
+    return json({ success: true, message: 'Rule status updated' });
+  }
+  
+  // Handle point rules update
+  if (actionType === 'updatePointRules') {
+    if (!shop.program) {
       throw new Response('Program not found', { status: 404 });
     }
     
-    // Get all point rules from form data
     const ruleTypes = Object.values(PointRuleType);
     const updates = [];
     
     for (const type of ruleTypes) {
       const points = formData.get(`rule_${type}_points`);
       const description = formData.get(`rule_${type}_description`);
-      const isActive = formData.get(`rule_${type}_active`) === 'on';
       const sortOrder = formData.get(`rule_${type}_sortOrder`);
       
       if (points !== null && description !== null) {
@@ -243,7 +261,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           update: {
             points: parseInt(points.toString(), 10) || 0,
             description: description.toString(),
-            isActive,
             sortOrder: sortOrder ? parseInt(sortOrder.toString(), 10) : 0
           },
           create: {
@@ -251,28 +268,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             type: type as PointRuleType,
             points: parseInt(points.toString(), 10) || 0,
             description: description.toString(),
-            isActive,
+            isActive: true,
             sortOrder: sortOrder ? parseInt(sortOrder.toString(), 10) : 0
           }
         });
       }
     }
     
-    // Update all rules in a transaction
     await db.$transaction(
-      updates.map(update => 
-        db.pointRule.upsert(update)
-      )
+      updates.map(update => db.pointRule.upsert(update))
     );
     
-    return json({ success: true });
+    return json({ success: true, message: 'Point rules updated successfully' });
   }
   
   // Handle main settings update
   const pointsPerDollar = formData.get('pointsPerDollar');
   const minOrderValue = formData.get('minOrderValue');
   
-  const settings: SettingsFormData = {
+  const settings = {
     pointsPerDollar: pointsPerDollar ? Number(pointsPerDollar) : 0,
     minOrderValue: minOrderValue ? Number(minOrderValue) : 0,
     earnOnShipping: formData.get('earnOnShipping') === 'on',
@@ -283,7 +297,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     monthlyEarnCap: formData.get('monthlyEarnCap') ? Number(formData.get('monthlyEarnCap')) : null,
   };
 
-  // Validate the form data
   const errors: Record<string, string> = {};
   if (isNaN(settings.pointsPerDollar) || settings.pointsPerDollar <= 0) {
     errors.pointsPerDollar = 'Points per dollar must be a positive number';
@@ -296,17 +309,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ errors }, { status: 400 });
   }
 
-  const shop = await db.shop.findUnique({ where: { shopDomain: session.shop } });
-  if (!shop) {
-    throw new Response('Shop not found', { status: 404 });
-  }
-
-  // Update the program settings
   await db.programSettings.upsert({
     where: { shopId: shop.id },
     update: {
       pointsPerCurrency: settings.pointsPerDollar,
-      minSubtotalCents: Math.round(settings.minOrderValue * 100), // Convert to cents
+      minSubtotalCents: Math.round(settings.minOrderValue * 100),
       earnOnShipping: settings.earnOnShipping,
       excludeDiscounts: settings.excludeDiscounts,
       rounding: settings.rounding,
@@ -327,7 +334,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     },
   });
 
-  return redirect('/app/settings');
+  return json({ success: true, message: 'Settings updated successfully' });
 };
 
 const PointRuleTypeLabels: Record<PointRuleType, string> = {
@@ -341,115 +348,26 @@ const PointRuleTypeLabels: Record<PointRuleType, string> = {
 
 export default function SettingsPage() {
   const { program, pointRules, currency } = useLoaderData<typeof loader>();
-  const actionData = useActionData<{ errors?: Record<string, string> }>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   
-  // Initialize form state with program data
-  const [formData, setFormData] = useState({
-    pointsPerDollar: program?.pointsPerCurrency?.toString() || '100',
-    minOrderValue: program?.minSubtotalCents ? (program.minSubtotalCents / 100).toFixed(2) : '0',
-    maxPointsPerOrder: program?.maxPointsPerOrder?.toString() || '',
-    dailyEarnCap: program?.dailyEarnCap?.toString() || '',
-    monthlyEarnCap: program?.monthlyEarnCap?.toString() || '',
-    rounding: program?.rounding || 'nearest',
-    excludeDiscounts: program?.excludeDiscounts || false,
-    earnOnShipping: program?.earnOnShipping || false,
-  });
+  const isSubmitting = navigation.state === 'submitting';
+  const isSettingsSubmitting = isSubmitting && navigation.formData?.get('_action') !== 'updatePointRules' && navigation.formData?.get('_action') !== 'toggleRule' && navigation.formData?.get('_action') !== 'moveRuleUp' && navigation.formData?.get('_action') !== 'moveRuleDown';
+  const isPointRulesSubmitting = isSubmitting && navigation.formData?.get('_action') === 'updatePointRules';
 
-  // Initialize point rules from loader data
-  const [pointRulesState, setPointRulesState] = useState<PointRuleForm[]>(
-    pointRules?.map((rule) => ({
-      id: rule.id,
-      type: rule.type,
-      points: rule.points.toString(),
-      description: rule.description,
-      isActive: rule.isActive,
-      sortOrder: rule.sortOrder
-    })) || []
-  );
-
-  // Handle point rule changes
-  const handlePointRuleChange = (index: number, field: keyof PointRuleForm, value: any) => {
-    const updatedRules = [...pointRulesState];
-    updatedRules[index] = { ...updatedRules[index], [field]: value };
-    setPointRulesState(updatedRules);
-  };
-
-  // Toggle rule active state
-  const toggleRuleActive = (index: number) => {
-    const updatedRules = [...pointRulesState];
-    updatedRules[index].isActive = !updatedRules[index].isActive;
-    setPointRulesState(updatedRules);
-  };
-
-  // Move rule up in the list
-  const moveRuleUp = (index: number) => {
-    if (index === 0) return;
-    const updatedRules = [...pointRulesState];
-    [updatedRules[index], updatedRules[index - 1]] = [updatedRules[index - 1], updatedRules[index]];
-    // Update sort orders
-    updatedRules.forEach((rule, i) => {
-      rule.sortOrder = i;
-    });
-    setPointRulesState(updatedRules);
-  };
-
-  // Move rule down in the list
-  const moveRuleDown = (index: number) => {
-    if (index === pointRulesState.length - 1) return;
-    const updatedRules = [...pointRulesState];
-    [updatedRules[index], updatedRules[index + 1]] = [updatedRules[index + 1], updatedRules[index]];
-    // Update sort orders
-    updatedRules.forEach((rule, i) => {
-      rule.sortOrder = i;
-    });
-    setPointRulesState(updatedRules);
-  };
-
-  // Handle point rules form submission
-  const handlePointRulesSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const formData = new FormData();
-    formData.append('_action', 'updatePointRules');
-    
-    pointRulesState.forEach((rule) => {
-      formData.append(`rule_${rule.type}_points`, rule.points);
-      formData.append(`rule_${rule.type}_description`, rule.description);
-      formData.append(`rule_${rule.type}_active`, rule.isActive ? 'on' : 'off');
-      formData.append(`rule_${rule.type}_sortOrder`, rule.sortOrder.toString());
-    });
-    
-    try {
-      const response = await fetch('/app/settings', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (response.ok) {
-        // Show success message or update UI as needed
-        console.log('Point rules updated successfully');
-      } else {
-        // Handle error
-        console.error('Failed to update point rules');
-      }
-    } catch (error) {
-      console.error('Error updating point rules:', error);
-    }
-  };
-
-  // Handle input changes for TextField components
-  const handleTextFieldChange = (value: string, name: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-  
   return (
     <Page>
       <TitleBar title="Loyalty Program Settings" />
       <Layout>
         <Layout.Section>
+          {actionData && 'success' in actionData && actionData.success && (
+            <Box paddingBlockEnd="400">
+              <Banner tone="success" onDismiss={() => {}}>
+                {actionData.message || 'Changes saved successfully'}
+              </Banner>
+            </Box>
+          )}
+          
           <Card>
             <Form method="post">
               <BlockStack gap="400">
@@ -463,9 +381,8 @@ export default function SettingsPage() {
                   min={1}
                   step={1}
                   autoComplete="off"
-                  value={formData.pointsPerDollar}
-                  onChange={(value) => handleTextFieldChange(value, 'pointsPerDollar')}
-                  error={actionData?.errors?.pointsPerDollar}
+                  value={program?.pointsPerCurrency?.toString() || '100'}
+                  error={actionData && 'errors' in actionData ? actionData.errors?.pointsPerDollar : undefined}
                   helpText={`Customers will earn this many points for each ${currency} spent`}
                 />
 
@@ -476,9 +393,8 @@ export default function SettingsPage() {
                   min={0}
                   step={0.01}
                   autoComplete="off"
-                  value={formData.minOrderValue}
-                  onChange={(value) => handleTextFieldChange(value, 'minOrderValue')}
-                  error={actionData?.errors?.minOrderValue}
+                  value={program?.minSubtotalCents ? (program.minSubtotalCents / 100).toFixed(2) : '0'}
+                  error={actionData && 'errors' in actionData ? actionData.errors?.minOrderValue : undefined}
                   prefix={currency}
                   helpText="Set to 0 to allow points on all orders"
                 />
@@ -490,8 +406,7 @@ export default function SettingsPage() {
                   min={0}
                   step={1}
                   autoComplete="off"
-                  value={formData.maxPointsPerOrder}
-                  onChange={(value) => handleTextFieldChange(value, 'maxPointsPerOrder')}
+                  value={program?.maxPointsPerOrder?.toString() || ''}
                   helpText="Leave empty for no limit"
                 />
 
@@ -502,8 +417,7 @@ export default function SettingsPage() {
                   min={0}
                   step={1}
                   autoComplete="off"
-                  value={formData.dailyEarnCap}
-                  onChange={(value) => handleTextFieldChange(value, 'dailyEarnCap')}
+                  value={program?.dailyEarnCap?.toString() || ''}
                   helpText="Maximum points a customer can earn per day"
                 />
 
@@ -514,8 +428,7 @@ export default function SettingsPage() {
                   min={0}
                   step={1}
                   autoComplete="off"
-                  value={formData.monthlyEarnCap}
-                  onChange={(value) => handleTextFieldChange(value, 'monthlyEarnCap')}
+                  value={program?.monthlyEarnCap?.toString() || ''}
                   helpText="Maximum points a customer can earn per month"
                 />
 
@@ -523,8 +436,8 @@ export default function SettingsPage() {
                   <Text as="p" variant="bodyMd" fontWeight="medium">Point rounding</Text>
                   <select 
                     name="rounding"
-                    value={formData.rounding}
-                    onChange={(e) => handleTextFieldChange(e.target.value, 'rounding')}
+                    value={program?.rounding || 'nearest'}
+                    defaultValue={program?.rounding || 'nearest'}
                     style={{
                       width: '100%',
                       padding: '0.5rem',
@@ -546,8 +459,7 @@ export default function SettingsPage() {
                     <input
                       type="checkbox"
                       name="excludeDiscounts"
-                      checked={formData.excludeDiscounts}
-                      onChange={(e) => setFormData(prev => ({ ...prev, excludeDiscounts: e.target.checked }))}
+                      defaultChecked={program?.excludeDiscounts || false}
                       style={{ width: '1rem', height: '1rem' }}
                     />
                     <Text as="span" variant="bodyMd">Exclude discounts from point calculations</Text>
@@ -562,8 +474,7 @@ export default function SettingsPage() {
                     <input
                       type="checkbox"
                       name="earnOnShipping"
-                      checked={formData.earnOnShipping}
-                      onChange={(e) => setFormData(prev => ({ ...prev, earnOnShipping: e.target.checked }))}
+                      defaultChecked={program?.earnOnShipping || false}
                       style={{ width: '1rem', height: '1rem' }}
                     />
                     <Text as="span" variant="bodyMd">Award points on shipping costs</Text>
@@ -576,7 +487,7 @@ export default function SettingsPage() {
                 <Divider />
                 
                 <Box paddingBlockStart="400">
-                  <Button submit variant="primary">
+                  <Button submit variant="primary" loading={isSettingsSubmitting}>
                     Save Settings
                   </Button>
                 </Box>
@@ -587,7 +498,8 @@ export default function SettingsPage() {
           {/* Point Rules Section */}
           <Box paddingBlockStart="400">
             <Card>
-              <Form onSubmit={handlePointRulesSubmit}>
+              <Form method="post">
+                <input type="hidden" name="_action" value="updatePointRules" />
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingLg">Point Rules</Text>
                   <Text as="p" variant="bodyMd">
@@ -598,7 +510,7 @@ export default function SettingsPage() {
                   <DataTable
                     columnContentTypes={['text', 'text', 'text', 'text', 'text']}
                     headings={['Rule', 'Points', 'Description', 'Status', 'Actions']}
-                    rows={pointRulesState
+                    rows={pointRules
                       .sort((a, b) => a.sortOrder - b.sortOrder)
                       .map((rule, index) => [
                       PointRuleTypeLabels[rule.type],
@@ -608,8 +520,8 @@ export default function SettingsPage() {
                           labelHidden
                           type="number"
                           min={0}
-                          value={rule.points}
-                          onChange={(value) => handlePointRuleChange(index, 'points', value)}
+                          name={`rule_${rule.type}_points`}
+                          value={rule.points.toString()}
                           autoComplete="off"
                         />
                       ),
@@ -617,8 +529,8 @@ export default function SettingsPage() {
                         <TextField
                           label=""
                           labelHidden
+                          name={`rule_${rule.type}_description`}
                           value={rule.description}
-                          onChange={(value) => handlePointRuleChange(index, 'description', value)}
                           autoComplete="off"
                         />
                       ),
@@ -629,34 +541,58 @@ export default function SettingsPage() {
                       ),
                       (
                         <InlineStack gap="100">
-                          <Button
-                            size="slim"
-                            onClick={() => toggleRuleActive(index)}
-                            variant={rule.isActive ? 'secondary' : 'primary'}
-                          >
-                            {rule.isActive ? 'Deactivate' : 'Activate'}
-                          </Button>
+                          <Form method="post">
+                            <input type="hidden" name="_action" value="toggleRule" />
+                            <input type="hidden" name="ruleId" value={rule.id} />
+                            <input type="hidden" name="currentActive" value={rule.isActive.toString()} />
+                            <Button
+                              size="slim"
+                              submit
+                              variant={rule.isActive ? 'secondary' : 'primary'}
+                            >
+                              {rule.isActive ? 'Deactivate' : 'Activate'}
+                            </Button>
+                          </Form>
                           <ButtonGroup>
-                            <Button
-                              size="slim"
-                              onClick={() => moveRuleUp(index)}
-                              disabled={index === 0}
-                              icon={<Icon source={ArrowUpIcon} />}
-                            />
-                            <Button
-                              size="slim"
-                              onClick={() => moveRuleDown(index)}
-                              disabled={index === pointRulesState.length - 1}
-                              icon={<Icon source={ArrowDownIcon} />}
-                            />
+                            <Form method="post">
+                              <input type="hidden" name="_action" value="moveRuleUp" />
+                              <input type="hidden" name="ruleId" value={rule.id} />
+                              <input type="hidden" name="currentSortOrder" value={rule.sortOrder} />
+                              <Button
+                                size="slim"
+                                submit
+                                disabled={index === 0}
+                                icon={<Icon source={ArrowUpIcon} />}
+                              />
+                            </Form>
+                            <Form method="post">
+                              <input type="hidden" name="_action" value="moveRuleDown" />
+                              <input type="hidden" name="ruleId" value={rule.id} />
+                              <input type="hidden" name="currentSortOrder" value={rule.sortOrder} />
+                              <Button
+                                size="slim"
+                                submit
+                                disabled={index === pointRules.length - 1}
+                                icon={<Icon source={ArrowDownIcon} />}
+                              />
+                            </Form>
                           </ButtonGroup>
                         </InlineStack>
                       )
                     ])}
                   />
                   
+                  {pointRules.map(rule => (
+                    <input 
+                      key={rule.id}
+                      type="hidden" 
+                      name={`rule_${rule.type}_sortOrder`} 
+                      value={rule.sortOrder} 
+                    />
+                  ))}
+                  
                   <Box paddingBlockStart="400">
-                    <Button submit variant="primary">
+                    <Button submit variant="primary" loading={isPointRulesSubmitting}>
                       Save Point Rules
                     </Button>
                   </Box>
