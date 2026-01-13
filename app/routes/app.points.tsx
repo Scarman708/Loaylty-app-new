@@ -1,30 +1,10 @@
-import type { LoaderFunctionArgs, MetaFunction } from '@remix-run/node';
+import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useNavigation, useSearchParams } from '@remix-run/react';
-import { useCallback, useState } from 'react';
-
+import { Form, useLoaderData, useSearchParams } from '@remix-run/react';
 import { authenticate } from '../shopify.server';
+import { Prisma } from '@prisma/client';
 import db from '../db.server';
 
-import {
-  Page,
-  Layout,
-  Card,
-  DataTable,
-  Spinner,
-  Banner,
-  TextField,
-  Select,
-  Badge,
-  Text,
-  Box,
-  Button,
-  Icon,
-  Pagination,
-  ButtonGroup,
-  InlineStack,
-} from '@shopify/polaris';
-import { SearchIcon, FilterIcon } from '@shopify/polaris-icons';
 interface CustomerPoints {
   id: string;
   name: string;
@@ -33,539 +13,247 @@ interface CustomerPoints {
   lifetimePoints: number;
   lastEarnedAt?: string | null;
   joinedAt?: string | null;
+  status: string;
+  shopCustomerId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface Transaction {
-  id: string;
-  date: string;
-  type: 'earn' | 'spend' | 'adjustment' | 'referral';
-  points: number;
-  orderId?: string | null;
-  orderName?: string | null;
-  status: 'pending' | 'available' | 'expired' | 'cancelled';
-  metadata?: Record<string, any>;
-}
-
-interface PointsData {
-  customers: CustomerPoints[];
-  transactions: Transaction[];
-  pagination: {
-    total: number;
-    page: number;
-    perPage: number;
-    totalPages: number;
-  };
-  stats: {
-    totalPoints: number;
-    activeCustomers: number;
-    pendingPoints: number;
-  };
-  source: 'database' | 'api';
-  error?: string;
-}
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleString();
-}
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'PENDING':
-      return <Badge tone="info">Pending</Badge>;
-    case 'AVAILABLE':
-      return <Badge tone="success">Available</Badge>;
-    case 'EXPIRED':
-      return <Badge tone="warning">Expired</Badge>;
-    case 'CANCELLED':
-      return <Badge tone="critical">Cancelled</Badge>;
-    default:
-      return <Badge>{status}</Badge>;
-  }
-}
-
-function getTypeBadge(type: string) {
-  switch (type) {
-    case 'earn':
-      return <Badge tone="success">Earned</Badge>;
-    case 'spend':
-      return <Badge tone="info">Spent</Badge>;
-    case 'referral':
-      return <Badge tone="attention">Referral</Badge>;
-    case 'adjustment':
-      return <Badge tone="warning">Adjusted</Badge>;
-    default:
-      return <Badge>{type}</Badge>;
-  }
-}
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get('page') || '1', 10);
-  const perPage = 10;
   const search = url.searchParams.get('search') || '';
   const status = url.searchParams.get('status') || '';
+  const page = parseInt(url.searchParams.get('page') || '1');
+  const perPage = 10;
 
   try {
-    // Get or create shop
-    const shop = await db.shop.upsert({
-      where: { shopDomain: session.shop },
-      update: {},
-      create: {
-        shopDomain: session.shop,
-        accessToken: 'temp',
-        currencyCode: 'USD',
-      },
-      select: { id: true },
-    });
-
-    const shopId = shop.id;
-
-    // Build where clause for customers
-    const customerWhere: any = { shopId };
-
-    if (search) {
-      const orConditions: any[] = [
-        { email: { contains: search, mode: 'insensitive' } },
-      ];
-
-      if (/^\d+$/.test(search)) {
-        orConditions.push({ shopCustomerId: { equals: BigInt(search) } });
-      }
-
-      customerWhere.OR = orConditions;
-    }
-
-    // Get customers with pagination
-    const [customers, totalCustomers] = await Promise.all([
-      db.customer.findMany({
-        where: customerWhere,
-        select: {
-          id: true,
-          email: true,
-          pointBalance: true,
-          lifetimePoints: true,
-          lastEarnedAt: true,
-          createdAt: true,
-        },
-        orderBy: { pointBalance: 'desc' },
-        skip: (page - 1) * perPage,
-        take: perPage,
+    
+    const [customers, total] = await Promise.all([
+  db.customer.findMany({
+    where: {
+      shopId: 1, // Make sure to set the correct shopId
+      ...(search && {
+        OR: [
+          { email: { contains: search } },
+          { shopifyId: { contains: search } },
+        ].filter(Boolean),
       }),
-      db.customer.count({ where: customerWhere }),
-    ]);
-
-    // Build where clause for transactions
-    const transactionWhere: any = { shopId };
-    if (status) {
-      transactionWhere.status = status;
-    }
-    if (search) {
-      transactionWhere.OR = [
-        { customer: { email: { contains: search, mode: 'insensitive' } } },
-        { orderName: { contains: search, mode: 'insensitive' } },
-        { metadata: { path: ['orderNumber'], equals: search } },
-      ];
-    }
-
-    // Get transactions for the dashboard
-    const recentTransactions = await db.pointLedger.findMany({
-      where: transactionWhere,
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      include: {
-        customer: {
-          select: { email: true },
-        },
-      },
-    });
-
-    // Get stats
-    const [totalPoints, pendingPoints] = await Promise.all([
-      db.customer.aggregate({
-        where: { shopId },
-        _sum: { pointBalance: true },
+      ...(status && { status }),
+    },
+    skip: (page - 1) * perPage,
+    take: perPage,
+    orderBy: { pointBalance: 'desc' },
+    select: {
+      id: true,
+      email: true,
+      pointBalance: true,  // Changed from points to pointBalance
+      lifetimePoints: true,
+      lastEarnedAt: true,
+      shopCustomerId: true,
+      createdAt: true,
+      updatedAt: true,
+      shopId: true,
+      // Removed firstName and lastName as they're not in the Customer model
+      // Added other fields from your Customer model
+      acceptsMarketing: true,
+      birthday: true,
+      currentTierId: true,
+      referralCode: true,
+      referredByCode: true,
+    },
+  }),
+  db.customer.count({
+    where: {
+      shopId: 1, // Same shopId as above
+      ...(search && {
+        OR: [
+          { email: { contains: search } },
+          { shopifyId: { contains: search } },
+        ].filter(Boolean),
       }),
-      db.pointLedger.aggregate({
-        where: {
-          shopId,
-          status: 'PENDING',
-        },
-        _sum: { delta: true },
-      }),
-    ]);
-
-    // Format the data
-    const formattedCustomers: CustomerPoints[] = customers.map((customer) => ({
-      id: customer.id.toString(),
-      name: customer.email?.split('@')[0] || `Customer ${customer.id}`,
-      email: customer.email || 'No email',
-      points: customer.pointBalance,
-      lifetimePoints: customer.lifetimePoints,
-      lastEarnedAt: customer.lastEarnedAt?.toISOString(),
-      joinedAt: customer.createdAt.toISOString(),
-    }));
-
-    const formattedTransactions: Transaction[] = recentTransactions.map((tx) => ({
-      id: tx.id.toString(),
-      date: tx.createdAt.toISOString(),
-      type:
-        tx.reason === 'REFERRAL_BONUS'
-          ? 'referral'
-          : tx.reason === 'EARN'
-          ? 'earn'
-          : 'adjustment',
-      points: tx.delta,
-      orderId: tx.orderId?.toString(),
-      orderName: tx.orderName,
-      status: tx.status.toLowerCase() as Transaction['status'],
-      metadata: tx.metadata as Record<string, any>,
-    }));
+      ...(status && { status }),
+    },
+  }),
+]);
 
     return json({
-      customers: formattedCustomers,
-      transactions: formattedTransactions,
+      customers,
       pagination: {
-        total: totalCustomers,
+        total,
         page,
         perPage,
-        totalPages: Math.ceil(totalCustomers / perPage),
+        totalPages: Math.ceil(total / perPage),
       },
-      stats: {
-        totalPoints: totalPoints._sum.pointBalance || 0,
-        activeCustomers: totalCustomers,
-        pendingPoints: pendingPoints._sum.delta || 0,
-      },
-      source: 'database' as const,
     });
   } catch (error) {
-    console.error('Error in points loader:', error);
+    console.error('Error loading customer points:', error);
     return json(
-      {
-        error: 'Failed to load customer points data',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 },
+      { error: 'Failed to load customer points' },
+      { status: 500 }
     );
   }
-};
+}
 
 export default function CustomerPointsPage() {
-  const navigation = useNavigation();
-  const isLoading = navigation.state !== 'idle';
+  const data = useLoaderData<typeof loader>();
+  const customers = 'error' in data ? [] : data.customers;
+  const pagination = 'error' in data ? { total: 0, page: 1, perPage: 10, totalPages: 1 } : data.pagination;
+  const error = 'error' in data ? data.error : undefined;
+  const [searchParams] = useSearchParams();
+  const search = searchParams.get('search') || '';
+  const status = searchParams.get('status') || '';
 
-  const {
-    customers = [],
-    transactions = [],
-    pagination,
-    stats,
-    source,
-    error,
-  } = useLoaderData<typeof loader>() as any; // TODO: tighten typing if desired
-
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
-  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
-
-  // Update URL when filters change
-  const handleSearch = useCallback(() => {
-    const params = new URLSearchParams(searchParams);
-
-    if (searchValue) {
-      params.set('search', searchValue);
-      params.set('page', '1');
-    } else {
-      params.delete('search');
-    }
-
-    if (statusFilter) {
-      params.set('status', statusFilter);
-      params.set('page', '1');
-    } else {
-      params.delete('status');
-    }
-
-    setSearchParams(params);
-  }, [searchValue, statusFilter, searchParams, setSearchParams]);
-
-  // Handle pagination
-  const handlePagination = (page: number) => {
-    const params = new URLSearchParams(searchParams);
-    params.set('page', page.toString());
-    setSearchParams(params);
-  };
-
-  // Handle status filter change
-  const handleStatusFilterChange = useCallback(
-    (value: string) => {
-      setStatusFilter(value);
-      const params = new URLSearchParams(searchParams);
-      if (value) {
-        params.set('status', value);
-        params.set('page', '1');
-      } else {
-        params.delete('status');
-      }
-      setSearchParams(params);
-    },
-    [searchParams, setSearchParams],
-  );
-
-  // Handle search input change
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchValue(value);
-  }, []);
-
-  // Handle search submit
-  const handleSearchSubmit = useCallback(() => {
-    handleSearch();
-  }, [handleSearch]);
-
-  // Handle clear filters
-  const handleClearFilters = useCallback(() => {
-    setSearchValue('');
-    setStatusFilter('');
-    setSearchParams({});
-  }, [setSearchParams]);
-
-  if (error) {
-    return (
-      <Page title="Points">
-        <Layout>
-          <Layout.Section>
-            <Banner title="Error" tone="critical">
-              <p>{error}</p>
-            </Banner>
-          </Layout.Section>
-        </Layout>
-      </Page>
-    );
-  }
-
-  // Customer table rows
-  const customerRows = customers.map((customer: CustomerPoints) => [
-    <Text as="span" variant="bodyMd" fontWeight="semibold" key={`name-${customer.id}`}>
-      {customer.name}
-    </Text>,
-    <Text as="span" variant="bodyMd" key={`email-${customer.id}`}>
-      {customer.email}
-    </Text>,
-    <Text as="span" variant="bodyMd" key={`points-${customer.id}`}>
-      {customer.points.toLocaleString()}
-    </Text>,
-    <Text as="span" variant="bodyMd" key={`lifetime-${customer.id}`}>
-      {customer.lifetimePoints.toLocaleString()}
-    </Text>,
-    <Text as="span" variant="bodyMd" key={`last-earned-${customer.id}`}>
-      {customer.lastEarnedAt ? formatDate(customer.lastEarnedAt) : 'Never'}
-    </Text>,
-  ]);
-
-  // Transaction table rows
-  const transactionRows = transactions.map((tx: Transaction) => [
-    <Text as="span" variant="bodyMd" key={`type-${tx.id}`}>
-      {getTypeBadge(tx.type)}
-    </Text>,
-    <Text as="span" variant="bodyMd" key={`points-${tx.id}`}>
-      {tx.points > 0 ? `+${tx.points}` : tx.points}
-    </Text>,
-    <Text as="span" variant="bodyMd" key={`order-${tx.id}`}>
-      {tx.orderName ? `#${tx.orderName}` : 'N/A'}
-    </Text>,
-    <Text as="span" variant="bodyMd" key={`date-${tx.id}`}>
-      {formatDate(tx.date)}
-    </Text>,
-    <Text as="span" variant="bodyMd" key={`status-${tx.id}`}>
-      {getStatusBadge(tx.status.toUpperCase())}
-    </Text>,
-  ]);
-
-  return (
-    <Page title="Loyalty Points Dashboard">
-      <Layout>
-        {/* Stats Overview */}
-        <Layout.Section>
-          <Card>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                gap: '1rem',
-              }}
-            >
-              <Box padding="400" background="bg-surface" borderRadius="200">
-                <Text as="h3" variant="headingSm">
-                  Total Points
-                </Text>
-                <Text as="p" variant="headingXl">
-                  {stats?.totalPoints.toLocaleString()}
-                </Text>
-              </Box>
-              <Box padding="400" background="bg-surface" borderRadius="200">
-                <Text as="h3" variant="headingSm">
-                  Active Customers
-                </Text>
-                <Text as="p" variant="headingXl">
-                  {stats?.activeCustomers.toLocaleString()}
-                </Text>
-              </Box>
-              <Box padding="400" background="bg-surface" borderRadius="200">
-                <Text as="h3" variant="headingSm">
-                  Pending Points
-                </Text>
-                <Text as="p" variant="headingXl">
-                  {stats?.pendingPoints.toLocaleString()}
-                </Text>
-              </Box>
-            </div>
-          </Card>
-        </Layout.Section>
-
-        {/* Search and Filters */}
-        <Layout.Section>
-          <Card>
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-              <div style={{ flex: 1 }} onKeyDown={(event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      handleSearchSubmit();
-    }
-  }}>
-                <TextField
-                  label="Search customers or orders"
-                  value={searchValue}
-                  onChange={handleSearchChange}
-                  prefix={<Icon source={SearchIcon} />}
-                  placeholder="Search by email, name, or order #"
-                  autoComplete="off"
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Customer Points</title>
+        <link href="https://unpkg.com/tailwindcss@^2.0.0/dist/tailwind.min.css" rel="stylesheet">
+        <style>
+          .pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
+          .pagination a, .pagination span { padding: 0.5rem 1rem; border: 1px solid #e2e8f0; border-radius: 0.25rem; }
+          .pagination .active { background-color: #3b82f6; color: white; border-color: #3b82f6; }
+          .pagination a:not(.active):hover { background-color: #f8fafc; }
+        </style>
+      </head>
+      <body class="bg-gray-50 min-h-screen">
+        <div class="container mx-auto px-4 py-8">
+          <h1 class="text-2xl font-bold mb-6">Customer Points</h1>
+          
+          <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <Form method="get" class="flex flex-col md:flex-row gap-4 items-end">
+              <div class="flex-1 w-full">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <input
+                  type="text"
+                  name="search"
+                  value="${search}"
+                  placeholder="Search by name or email..."
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              <div style={{ minWidth: '200px' }}>
-                <Select
-                  label="Status filter"
-                  options={[
-                    { label: 'All Statuses', value: '' },
-                    { label: 'Available', value: 'AVAILABLE' },
-                    { label: 'Pending', value: 'PENDING' },
-                    { label: 'Expired', value: 'EXPIRED' },
-                    { label: 'Cancelled', value: 'CANCELLED' },
-                  ]}
-                  value={statusFilter}
-                  onChange={handleStatusFilterChange}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <Button onClick={handleSearchSubmit} variant="primary">
-                  Search
-                </Button>
-              </div>
-            </div>
-            {(searchParams.get('search') || searchParams.get('status')) && (
-              <div style={{ marginBottom: '1rem' }}>
-                <ButtonGroup>
-                  <Button onClick={handleClearFilters}>Clear filters</Button>
-                </ButtonGroup>
-              </div>
-            )}
-          </Card>
-        </Layout.Section>
-
-        {/* Recent Transactions */}
-        <Layout.Section>
-          <Card>
-            <Text as="h2" variant="headingLg">
-              Recent Transactions
-            </Text>
-            {isLoading ? (
-              <Box padding="400">
-                <InlineStack align="center" blockAlign="center">
-                  <Spinner accessibilityLabel="Loading transactions" size="large" />
-                </InlineStack>
-              </Box>
-            ) : transactions.length > 0 ? (
-              <DataTable
-                columnContentTypes={['text', 'text', 'text', 'text', 'text']}
-                headings={['Type', 'Points', 'Order', 'Date', 'Status']}
-                rows={transactionRows}
-                footerContent={`Showing ${transactions.length} of ${
-                  pagination?.total ?? 0
-                } transactions`}
-              />
-            ) : (
-              <Box padding="400">
-                <Text as="p" variant="bodyMd" alignment="center">
-                  No transactions found
-                </Text>
-              </Box>
-            )}
-          </Card>
-        </Layout.Section>
-
-        {/* Customer Points */}
-        <Layout.Section>
-          <Card>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '1rem',
-              }}
-            >
-              <Text as="h2" variant="headingLg">
-                Customer Points
-              </Text>
-              <Text as="span" variant="bodySm" tone="subdued">
-                {pagination?.total ?? 0} total customers
-              </Text>
-            </div>
-            {isLoading ? (
-              <Box padding="400">
-                <InlineStack align="center" blockAlign="center">
-                  <Spinner accessibilityLabel="Loading customers" size="large" />
-                </InlineStack>
-              </Box>
-            ) : customers.length > 0 ? (
-              <div>
-                <DataTable
-                  columnContentTypes={['text', 'text', 'text', 'text', 'text']}
-                  headings={['Name', 'Email', 'Points', 'Lifetime Points', 'Last Earned']}
-                  rows={customerRows}
-                  footerContent={`Showing ${customers.length} of ${
-                    pagination?.total ?? 0
-                  } customers`}
-                />
-                <div
-                  style={{
-                    marginTop: '1rem',
-                    display: 'flex',
-                    justifyContent: 'center',
-                  }}
+              <div class="w-full md:w-48">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  name="status"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <Pagination
-                    hasPrevious={pagination?.page > 1}
-                    onPrevious={() => handlePagination((pagination?.page || 1) - 1)}
-                    hasNext={(pagination?.page || 1) < (pagination?.totalPages || 1)}
-                    onNext={() => handlePagination((pagination?.page || 1) + 1)}
-                    label={`Page ${pagination?.page ?? 1} of ${pagination?.totalPages ?? 1}`}
-                  />
+                  <option value="" ${!status ? 'selected' : ''}>All Statuses</option>
+                  <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
+                  <option value="inactive" ${status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                class="w-full md:w-auto px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Apply Filters
+              </button>
+            </Form>
+          </div>
+
+          ${error ? `
+            <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-red-700">${error}</p>
                 </div>
               </div>
-            ) : (
-              <Box padding="400">
-                <Text as="p" variant="bodyMd" alignment="center">
-                  No customers found
-                </Text>
-              </Box>
-            )}
-            <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-              <Text as="span" variant="bodySm" tone="subdued">
-                Data source: {source}
-              </Text>
+            </div>` : ''}
+
+          <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Points</th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Lifetime Points</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Activity</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  ${customers.map((customer: any) => `
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${escapeHtml(customer.name)}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHtml(customer.email)}</td>
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          customer.status === 'active' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }">
+                          ${customer.status}
+                        </span>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${customer.points.toLocaleString()}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${customer.lifetimePoints.toLocaleString()}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${
+                        customer.lastEarnedAt 
+                          ? new Date(customer.lastEarnedAt).toLocaleDateString() 
+                          : 'Never'
+                      }</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
             </div>
-          </Card>
-        </Layout.Section>
-      </Layout>
-    </Page>
-  );
+
+            ${pagination.totalPages > 1 ? `
+              <div class="px-6 py-4 border-t border-gray-200">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm text-gray-700">
+                    Showing <span class="font-medium">${(pagination.page - 1) * pagination.perPage + 1}</span> to 
+                    <span class="font-medium">${Math.min(pagination.page * pagination.perPage, pagination.total)}</span> of{' '}
+                    <span class="font-medium">${pagination.total}</span> results
+                  </div>
+                  <div class="pagination">
+                    ${pagination.page > 1 ? `
+                      <a href="?${new URLSearchParams({
+                        ...(search ? { search } : {}),
+                        ...(status ? { status } : {}),
+                        page: (pagination.page - 1).toString(),
+                      })}" class="page-link">Previous</a>
+                    ` : '<span class="opacity-50 cursor-not-allowed">Previous</span>'}
+                    
+                    ${Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(p => `
+                      <a href="?${new URLSearchParams({
+                        ...(search ? { search } : {}),
+                        ...(status ? { status } : {}),
+                        page: p.toString(),
+                      })}" class="page-link ${p === pagination.page ? 'active' : ''}">${p}</a>
+                    `).join('')}
+                    
+                    ${pagination.page < pagination.totalPages ? `
+                      <a href="?${new URLSearchParams({
+                        ...(search ? { search } : {}),
+                        ...(status ? { status } : {}),
+                        page: (pagination.page + 1).toString(),
+                      })}" class="page-link">Next</a>
+                    ` : '<span class="opacity-50 cursor-not-allowed">Next</span>'}
+                  </div>
+                </div>
+              </div>` : ''}
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+// Helper function to escape HTML
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
