@@ -111,65 +111,81 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 async function processOrderForPoints(shop: any, customer: any, order: any, orderId: bigint) {
   console.log('Processing order for points (no pending ledger found)');
   
-  // Get point rules for this shop
-  const pointRules = await prisma.pointRule.findMany({
-    where: {
-      shopId: shop.id,
-      isActive: true,
-    },
-    orderBy: { sortOrder: 'asc' },
+  // Get program settings
+  const programSettings = await prisma.programSettings.findUnique({
+    where: { shopId: shop.id }
   });
 
-  // Find the first active rule (assuming there's only one active rule for purchases)
-  const activeRule = pointRules[0];
-  
-  if (!activeRule) {
-    console.error('No active point rules found');
-    throw new Error("No active point rules found");
+  if (!programSettings) {
+    console.error('No program settings found for shop');
+    throw new Error("No program settings found");
+  }
+
+  // Check if points were already awarded
+  const existingLedger = await prisma.pointLedger.findFirst({
+    where: {
+      shopId: shop.id,
+      customerId: customer.id,
+      orderId: orderId,
+      status: { in: [LedgerStatus.AVAILABLE, LedgerStatus.PENDING] }
+    }
+  });
+
+  if (existingLedger) {
+    console.log('Points already processed for this order');
+    return;
   }
 
   // Calculate points based on order total
   const orderTotal = parseFloat(order.total_price || '0');
-  const points = Math.floor(orderTotal * activeRule.points);
+  const pointsToAward = Math.floor(orderTotal * programSettings.pointsPerCurrency);
 
-  console.log(`Calculated points: ${points} (${orderTotal} * ${activeRule.points})`);
+  console.log(`Calculating points: $${orderTotal} * ${programSettings.pointsPerCurrency} = ${pointsToAward} points`);
 
-  if (points <= 0) {
+  if (pointsToAward <= 0) {
     console.log('No points to award for order:', order.id);
     return;
   }
 
-  // Create ledger entry and update customer
-  await prisma.$transaction([
-    prisma.pointLedger.create({
-      data: {
-        shopId: shop.id,
-        customerId: customer.id,
-        delta: points,
-        reason: LedgerReason.EARN, // FIX: Use enum instead of string
-        source: LedgerSource.ORDER, // FIX: Use enum instead of string
-        status: LedgerStatus.AVAILABLE, // FIX: Use enum instead of string
-        orderId: orderId,
-        orderName: order.name || order.order_number?.toString(),
-        availableAt: new Date(),
-        metadata: {
-          orderTotal: order.total_price,
-          customerEmail: order.customer?.email,
-          orderCreatedAt: order.created_at,
-          pointsPerDollar: activeRule.points,
-          calculatedPoints: points
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Create the ledger entry
+      await tx.pointLedger.create({
+        data: {
+          shopId: shop.id,
+          customerId: customer.id,
+          delta: pointsToAward,
+          reason: LedgerReason.EARN,
+          source: LedgerSource.ORDER,
+          status: LedgerStatus.AVAILABLE,
+          orderId: orderId,
+          orderName: order.name || order.order_number?.toString(),
+          availableAt: new Date(),
+          metadata: {
+            orderTotal: order.total_price,
+            customerEmail: order.customer?.email,
+            orderCreatedAt: order.created_at,
+            pointsPerDollar: programSettings.pointsPerCurrency,
+            calculatedPoints: pointsToAward,
+            orderStatus: 'fulfilled'
+          },
         },
-      },
-    }),
-    prisma.customer.update({
-      where: { id: customer.id },
-      data: {
-        pointBalance: { increment: points },
-        lifetimePoints: { increment: points },
-        lastEarnedAt: new Date(),
-      },
-    }),
-  ]);
+      });
 
-  console.log(`✅ Created AVAILABLE ledger entry and awarded ${points} points`);
+      // Update customer's points
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: {
+          pointBalance: { increment: pointsToAward },
+          lifetimePoints: { increment: pointsToAward },
+          lastEarnedAt: new Date(),
+        },
+      });
+
+      console.log(`✅ Successfully awarded ${pointsToAward} points for order ${orderId}`);
+    });
+  } catch (error) {
+    console.error('❌ Error processing order points:', error);
+    throw error;
+  }
 }

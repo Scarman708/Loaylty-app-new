@@ -1,7 +1,13 @@
 // app/utils/shopifyCustomer.server.ts
-import { authenticate } from "~/shopify.server";
-import  prisma  from "~/db.server";
 import { LATEST_API_VERSION } from "@shopify/shopify-api";
+import prisma from "~/db.server";
+
+// Helper function to safely serialize BigInt
+function safeStringify(obj: any) {
+  return JSON.stringify(obj, (key, value) => 
+    typeof value === 'bigint' ? value.toString() : value
+  );
+}
 
 export async function syncCustomerToShopify(shopDomain: string, customerId: string) {
   try {
@@ -27,6 +33,33 @@ export async function syncCustomerToShopify(shopDomain: string, customerId: stri
       return false;
     }
 
+    // Convert BigInt to string for the request body
+    const customerData = {
+      customer: {
+        id: customer.shopCustomerId.toString(), // Convert BigInt to string
+        metafields: [
+          {
+            namespace: "loyalty",
+            key: "points_balance",
+            value: customer.pointBalance.toString(),
+            type: "number_integer"
+          },
+          {
+            namespace: "loyalty",
+            key: "lifetime_points",
+            value: customer.lifetimePoints.toString(),
+            type: "number_integer"
+          },
+          {
+            namespace: "loyalty",
+            key: "tier",
+            value: customer.currentTier?.name || 'Member',
+            type: "single_line_text_field"
+          }
+        ]
+      }
+    };
+
     // Update customer metafields in Shopify
     const response = await fetch(
       `https://${shopDomain}/admin/api/${LATEST_API_VERSION}/customers/${customer.shopCustomerId}.json`,
@@ -36,31 +69,7 @@ export async function syncCustomerToShopify(shopDomain: string, customerId: stri
           'Content-Type': 'application/json',
           'X-Shopify-Access-Token': shop.accessToken,
         },
-        body: JSON.stringify({
-          customer: {
-            id: customer.shopCustomerId,
-            metafields: [
-              {
-                namespace: "loyalty",
-                key: "points_balance",
-                value: customer.pointBalance.toString(),
-                type: "number_integer"
-              },
-              {
-                namespace: "loyalty",
-                key: "lifetime_points",
-                value: customer.lifetimePoints.toString(),
-                type: "number_integer"
-              },
-              {
-                namespace: "loyalty",
-                key: "tier",
-                value: customer.currentTier?.name || 'Member',
-                type: "single_line_text_field"
-              }
-            ]
-          }
-        })
+        body: safeStringify(customerData) // Use our safe stringify function
       }
     );
 

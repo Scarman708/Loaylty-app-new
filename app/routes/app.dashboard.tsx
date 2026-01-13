@@ -1,9 +1,11 @@
 import { json, LoaderFunctionArgs } from '@remix-run/node';
+import { Link } from '@remix-run/react';
 import { useLoaderData } from '@remix-run/react';
 import { Card, Layout, Page, DataTable, Text, BlockStack, InlineStack, Box, Divider } from '@shopify/polaris';
 import { TitleBar } from '@shopify/app-bridge-react';
-import { authenticate } from '../shopify.server';
+import { authenticate,shopify } from '../shopify.server';
 import db from '../db.server';
+import { useState } from 'react';
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -11,6 +13,48 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw new Response('Authentication failed', { status: 401 });
   }
   const shop = session.shop;
+const { admin } = await shopify.authenticate.admin(request);
+
+   const ordersResponse = await admin.graphql(
+    `#graphql
+      query GetRecentOrders($first: Int!) {
+        orders(first: $first) {
+          edges {
+            node {
+              id
+              name
+              processedAt
+              totalPriceSet {
+                shopMoney{
+                  amount
+                  currencyCode
+                }
+              }
+              displayFulfillmentStatus
+              customer {
+                displayName
+                email
+              }
+              metafield(namespace: "loyalty", key: "points_awarded") {
+                value
+              }
+            }
+          }
+        }
+      }
+    `,
+    {
+      variables: {
+        first: 20, // Get last 20 orders
+      },
+    }
+  );
+  const ordersData = await ordersResponse.json();
+  const recentOrders = ordersData.data?.orders?.edges?.map((edge: any) => ({
+    ...edge.node,
+    pointsAwarded: edge.node.metafield?.value ? parseInt(edge.node.metafield.value) : null,
+  })) || [];
+
 
   // Get shop data
   const shopData = await db.shop.findUnique({
@@ -118,6 +162,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     customers: customerList,
   });
 };
+
+const [selectedTab, setSelectedTab] = useState<'overview' | 'customers' | 'orders'>('overview');
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 
 export default function DashboardPage() {
   const { shop, program, stats, tiers, recentActivity, customers } = useLoaderData<typeof loader>();
