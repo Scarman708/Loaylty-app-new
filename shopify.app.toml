@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "dfc8d1577fe2dd02468f13585c3f6ce1"
-name = "Rewardlytics"
+name = "test-app"
 application_url = "https://loaylty-app-new.onrender.com"
 embedded = true
 
