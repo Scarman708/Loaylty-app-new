@@ -345,6 +345,7 @@ enum LedgerReason {
   REFERRAL_BONUS
   REFUND_REVERSAL
   ORDER_CANCELLED
+  TIER_UPGRADE
 }
 
 enum LedgerSource {

@@ -82,6 +82,80 @@
       margin: 0 auto;
     }
     
+    /* Tier Upgrade Announcement */
+    .tier-upgrade-announcement {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 0.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      animation: pulse 2s infinite;
+    }
+    
+    .tier-upgrade-announcement.hidden {
+      display: none;
+    }
+    
+    .tier-upgrade-content {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    
+    .tier-upgrade-icon {
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+    
+    .tier-upgrade-message {
+      font-weight: 500;
+    }
+    
+    .tier-upgrade-cta {
+      background: white;
+      color: #4f46e5;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    
+    .tier-upgrade-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .tier-upgrade-cta:active {
+      transform: translateY(0);
+    }
+    
+    .tier-upgrade-close {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.25rem;
+      cursor: pointer;
+      opacity: 0.8;
+      margin-left: 1rem;
+    }
+    
+    .tier-upgrade-close:hover {
+      opacity: 1;
+    }
+    
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.01); }
+      100% { transform: scale(1); }
+    }
+    
     .loyalty-dashboard__container {
       background: #fff;
     }
@@ -96,6 +170,159 @@
       text-align: center;
       padding: 3rem;
       color: #666;
+    }
+    
+    /* Rewards Section */
+    .rewards-section {
+      margin: 2rem 0;
+      padding: 2rem;
+      background: #f9fafb;
+      border-radius: 0.5rem;
+    }
+    
+    .rewards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    
+    .reward-card {
+      background: white;
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .reward-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    
+    .reward-available {
+      border-left: 4px solid #10b981;
+    }
+    
+    .reward-locked {
+      opacity: 0.7;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .reward-locked::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(249,250,251,0.9) 100%);
+      z-index: 1;
+    }
+    
+    .reward-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    
+    .reward-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #111827;
+      margin: 0;
+    }
+    
+    .reward-points {
+      background: #f3f4f6;
+      color: #374151;
+      font-weight: 600;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+    }
+    
+    .reward-description {
+      color: #4b5563;
+      margin-bottom: 1rem;
+      min-height: 3rem;
+    }
+    
+    .reward-next-tier {
+      font-size: 0.875rem;
+      color: #6b7280;
+      margin-bottom: 1rem;
+      font-style: italic;
+    }
+    
+    .reward-button {
+      width: 100%;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .reward-button:not(.button--disabled) {
+      background-color: #10b981;
+      color: white;
+      border: 1px solid #10b981;
+    }
+    
+    .reward-button:not(.button--disabled):hover {
+      background-color: #059669;
+      border-color: #059669;
+    }
+    
+    .reward-button.button--disabled {
+      background-color: #e5e7eb;
+      color: #9ca3af;
+      cursor: not-allowed;
+    }
+    
+    .alert {
+      padding: 1rem;
+      border-radius: 0.375rem;
+      margin-bottom: 1rem;
+      font-size: 0.9375rem;
+    }
+    
+    .alert--success {
+      background-color: #ecfdf5;
+      color: #065f46;
+      border-left: 4px solid #10b981;
+    }
+    
+    .alert--error {
+      background-color: #fef2f2;
+      color: #991b1b;
+      border-left: 4px solid #ef4444;
+    }
+    
+    .loading-spinner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      color: #6b7280;
+    }
+    
+    .spinner {
+      width: 2.5rem;
+      height: 2.5rem;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: #10b981;
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
     
     .loyalty-dashboard__grid {
@@ -480,6 +707,140 @@
   </style>
 
   <script>
+    // Function to load and display available rewards
+    async function loadRewards(customerId) {
+      try {
+        const response = await fetch(`/apps/loyalty/api/loyalty/rewards?customerId=${customerId}&shop=${window.Shopify.shop}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+          console.error('Failed to load rewards:', data.error);
+          return [];
+        }
+        
+        return data.rewards || [];
+      } catch (error) {
+        console.error('Error loading rewards:', error);
+        return [];
+      }
+    }
+
+    // Function to handle point redemption
+    async function redeemPoints(ruleId, points) {
+      try {
+        const response = await fetch('/apps/loyalty/api/loyalty/redeem', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            customerId: window.loyaltyData.customerId,
+            ruleId: ruleId,
+            points: points,
+            shop: window.Shopify.shop
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Redemption failed:', error);
+        throw error;
+      }
+    }
+
+    // Function to update the rewards UI
+    function updateRewardsUI(rewards) {
+      const rewardsContainer = document.querySelector('.rewards-container');
+      if (!rewardsContainer) return;
+      
+      if (rewards.length === 0) {
+        rewardsContainer.innerHTML = `
+          <div class="no-rewards">
+            <p>No rewards available at the moment. Check back later!</p>
+          </div>
+        `;
+        return;
+      }
+      
+      rewardsContainer.innerHTML = `
+        <div class="rewards-grid">
+          ${rewards.map(reward => `
+            <div class="reward-card ${reward.canRedeem ? 'reward-available' : 'reward-locked'}">
+              <div class="reward-header">
+                <h3 class="reward-title">${reward.title}</h3>
+                <div class="reward-points">${reward.minPoints} pts</div>
+              </div>
+              <div class="reward-description">${reward.description || ''}</div>
+              ${reward.nextStepPoints ? 
+                `<div class="reward-next-tier">
+                  Or earn ${reward.nextStepPoints - window.loyaltyData.currentPoints} more points
+                </div>` : ''
+              }
+              <button 
+                class="button reward-button ${!reward.canRedeem ? 'button--disabled' : ''}"
+                data-rule-id="${reward.id}"
+                data-points="${reward.minPoints}"
+                ${!reward.canRedeem ? 'disabled' : ''}
+              >
+                ${reward.canRedeem ? 'Redeem Now' : 'Not Enough Points'}
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      
+      // Add event listeners to redeem buttons
+      document.querySelectorAll('.reward-button:not(.button--disabled)').forEach(button => {
+        button.addEventListener('click', async () => {
+          const ruleId = button.dataset.ruleId;
+          const points = parseInt(button.dataset.points, 10);
+          
+          // Show loading state
+          const originalText = button.textContent;
+          button.disabled = true;
+          button.textContent = 'Processing...';
+          
+          try {
+            const result = await redeemPoints(ruleId, points);
+            
+            // Update UI with success message
+            const successMessage = document.createElement('div');
+            successMessage.className = 'alert alert--success';
+            successMessage.textContent = 'Success! Your reward has been redeemed.';
+            rewardsContainer.prepend(successMessage);
+            
+            // Reload dashboard to update points
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+            
+          } catch (error) {
+            // Show error message
+            const errorMessage = document.createElement('div');
+            errorMessage.className = 'alert alert--error';
+            errorMessage.textContent = error.message || 'Failed to redeem points. Please try again.';
+            rewardsContainer.prepend(errorMessage);
+            
+            // Reset button state
+            button.disabled = false;
+            button.textContent = originalText;
+            
+            // Remove error message after 5 seconds
+            setTimeout(() => {
+              errorMessage.remove();
+            }, 5000);
+          }
+        });
+      });
+    }
+
     document.addEventListener('DOMContentLoaded', async function() {
       const contentDiv = document.getElementById('loyalty-dashboard-content');
       const pointRules = Array.isArray(window.pointRules)
@@ -567,16 +928,30 @@ const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
 
         // Render dashboard
         contentDiv.innerHTML = `
+          <!-- Tier Upgrade Announcement -->
+          <div class="tier-upgrade-announcement hidden" id="tierUpgradeAnnouncement">
+            <div class="tier-upgrade-content">
+              <span class="tier-upgrade-icon">🎉</span>
+              <div class="tier-upgrade-message" id="tierUpgradeMessage"></div>
+            </div>
+            <div>
+              <button class="tier-upgrade-cta" id="tierUpgradeCta">Upgrade Now</button>
+              <button class="tier-upgrade-close" id="tierUpgradeClose">&times;</button>
+            </div>
+          </div>
+          
           <div class="loyalty-dashboard__grid">
             <div class="loyalty-card">
-              <div class="loyalty-card__title">Total Points</div>
-              <div class="loyalty-card__value">${currentPoints.toLocaleString()}</div>
-              <div class="loyalty-card__subtitle">Available to redeem</div>
-              ${nextTier ? `
-                <div class="loyalty-card__progress" style="margin-top: 1rem;">
-                  <div style="background: rgba(255,255,255,0.2); height: 6px; border-radius: 3px; margin-bottom: 0.5rem;">
-                    <div style="width: ${Math.min(100, (currentPoints / nextTier.pointsNeeded) * 100)}%; background: white; height: 100%; border-radius: 3px;"></div>
-                  </div>
+              <div class="loyalty-card__title">Current Tier</div>
+              <div class="loyalty-card__value tier-${currentTier.name.toLowerCase()}">${currentTier.name}</div>
+              <div class="loyalty-card__subtext">${currentTier.percentage}% to next tier</div>
+            </div>
+            
+            <div class="loyalty-card">
+              <div class="loyalty-card__title">Redeem Points</div>
+              <div class="loyalty-card__value">${rewards.length}</div>
+              <div class="loyalty-card__subtext">rewards available</div>
+              <button class="button button--primary" id="view-rewards-btn">View Rewards</button>
                   <div style="font-size: 0.75rem; opacity: 0.8;">
                     ${nextTier.pointsNeeded - currentPoints} points to ${nextTier.name}
                   </div>
@@ -658,6 +1033,19 @@ const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
             </div>
           </div>
           
+          <!-- Rewards Section -->
+          <div class="rewards-section" id="rewards-section" style="display: none; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
+            <h2 class="section-title">Available Rewards</h2>
+            <p class="section-subtitle">Redeem your points for exclusive rewards</p>
+            
+            <div class="rewards-container">
+              <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading rewards...</p>
+              </div>
+            </div>
+          </div>
+          
           <div class="tier-benefits">
             <h2 class="section-title">Membership Tiers</h2>
             ${tiers.map(tier => `
@@ -682,15 +1070,204 @@ const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
                   <button class="upgrade-btn" disabled>
                     Your Current Tier
                   </button>
-                ` : tier.minPoints > currentPoints ? `
+                ` : tier.minPoints <= currentPoints ? `
+                  <button class="upgrade-btn upgrade-available" data-tier="${tier.name}">
+                    Upgrade to ${tier.name}
+                  </button>
+                ` : `
                   <button class="upgrade-btn" disabled>
                     ${tier.minPoints - currentPoints} More Points to Unlock
                   </button>
-                ` : ''}
+                `}
               </div>
             `).join('')}
           </div>
         `;
+
+        // Store customer data for later use
+        window.loyaltyData = {
+          customerId: data.customerId,
+          currentPoints: currentPoints,
+          lifetimePoints: lifetimePoints,
+          currentTier: currentTier,
+          tiers: tiers,
+          nextTier: nextTier
+        };
+        
+        // Check for available tier upgrades
+        function checkForUpgrades() {
+          const availableUpgrades = tiers.filter(tier => 
+            tier.minPoints <= currentPoints && tier.name !== currentTier
+          );
+          
+          if (availableUpgrades.length > 0) {
+            const nextAvailableTier = availableUpgrades.reduce((highestTier, tier) => {
+              return tier.minPoints > highestTier.minPoints ? tier : highestTier;
+            }, availableUpgrades[0]);
+            
+            const announcement = document.getElementById('tierUpgradeAnnouncement');
+            const message = document.getElementById('tierUpgradeMessage');
+            const cta = document.getElementById('tierUpgradeCta');
+            
+            if (announcement && message && cta) {
+              message.textContent = `You've unlocked the ${nextAvailableTier.name} tier!`;
+              cta.textContent = 'Upgrade Now';
+              cta.onclick = () => scrollToTier(nextAvailableTier.name);
+              announcement.classList.remove('hidden');
+              
+              // Store in session storage to prevent showing again
+              if (sessionStorage) {
+                const shownAnnouncement = sessionStorage.getItem(`tierAnnouncement_${nextAvailableTier.name}`);
+                if (shownAnnouncement) {
+                  announcement.classList.add('hidden');
+                } else {
+                  sessionStorage.setItem(`tierAnnouncement_${nextAvailableTier.name}`, 'true');
+                }
+              }
+            }
+          }
+        }
+        
+        // Function to scroll to a specific tier card
+        function scrollToTier(tierName) {
+          const tierCards = document.querySelectorAll('.tier-card');
+          tierCards.forEach(card => {
+            if (card.querySelector('.tier-name').textContent.includes(tierName)) {
+              card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              card.style.animation = 'highlight 2s ease-in-out';
+              setTimeout(() => {
+                card.style.animation = '';
+              }, 2000);
+            }
+          });
+        }
+        
+        // Handle upgrade button clicks
+        document.querySelectorAll('.upgrade-available').forEach(button => {
+          button.addEventListener('click', async function() {
+            const tierName = this.dataset.tier;
+            const tier = tiers.find(t => t.name === tierName);
+            
+            if (tier && confirm(`Are you sure you want to upgrade to ${tierName} tier?`)) {
+              try {
+                // Show loading state
+                const originalText = this.textContent;
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner"></span> Upgrading...';
+                
+                // Call API to update tier
+                const response = await fetch('/apps/loyalty/api/loyalty/upgrade-tier', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    customerId: window.loyaltyData.customerId,
+                    tierName: tierName,
+                    shop: window.Shopify.shop
+                  })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                  // Show success message and reload
+                  alert(`Congratulations! You've been upgraded to ${tierName} tier.`);
+                  window.location.reload();
+                } else {
+                  throw new Error(result.error || 'Failed to upgrade tier');
+                }
+              } catch (error) {
+                console.error('Upgrade error:', error);
+                alert(error.message || 'Failed to upgrade tier. Please try again.');
+                this.disabled = false;
+                this.textContent = originalText;
+              }
+            }
+          });
+        });
+        
+        // Close announcement
+        const closeBtn = document.getElementById('tierUpgradeClose');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', function() {
+            const announcement = document.getElementById('tierUpgradeAnnouncement');
+            if (announcement) {
+              announcement.classList.add('hidden');
+            }
+          });
+        }
+        
+        // Check for upgrades when page loads
+        checkForUpgrades();
+        
+        // Add highlight animation
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes highlight {
+            0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+          }
+          .tier-card {
+            transition: all 0.3s ease;
+          }
+          .upgrade-available {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+          }
+          .upgrade-available:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          }
+        `;
+        document.head.appendChild(style);
+        
+        // Load and display rewards
+        const viewRewardsBtn = document.getElementById('view-rewards-btn');
+        const rewardsSection = document.getElementById('rewards-section');
+        let rewardsLoaded = false;
+        
+        viewRewardsBtn.addEventListener('click', async () => {
+          rewardsSection.style.display = 'block';
+          viewRewardsBtn.textContent = 'Loading Rewards...';
+          viewRewardsBtn.disabled = true;
+          
+          if (!rewardsLoaded) {
+            try {
+              const rewards = await loadRewards(data.customerId);
+              updateRewardsUI(rewards);
+              rewardsLoaded = true;
+            } catch (error) {
+              console.error('Failed to load rewards:', error);
+              const container = document.querySelector('.rewards-container');
+              if (container) {
+                container.innerHTML = `
+                  <div class="alert alert--error">
+                    Failed to load rewards. Please try again later.
+                  </div>
+                `;
+              }
+            } finally {
+              viewRewardsBtn.textContent = 'Hide Rewards';
+              viewRewardsBtn.disabled = false;
+            }
+          } else {
+            rewardsSection.style.display = rewardsSection.style.display === 'none' ? 'block' : 'none';
+            viewRewardsBtn.textContent = rewardsSection.style.display === 'none' ? 'View Rewards' : 'Hide Rewards';
+          }
+        });
+        
+        // Close rewards section when clicking outside
+        document.addEventListener('click', (e) => {
+          if (rewardsSection && !rewardsSection.contains(e.target) && 
+              e.target !== viewRewardsBtn && !viewRewardsBtn.contains(e.target)) {
+            rewardsSection.style.display = 'none';
+            viewRewardsBtn.textContent = 'View Rewards';
+          }
+        });
 
       } catch (err) {
         console.error('Dashboard error:', err);
