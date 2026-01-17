@@ -948,14 +948,39 @@ const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
             </div>
             
             <div class="loyalty-card">
-              <div class="loyalty-card__title">Redeem Points</div>
-              <div class="loyalty-card__value">${rewards.length}</div>
-              <div class="loyalty-card__subtext">rewards available</div>
-              <button class="button button--primary" id="view-rewards-btn">View Rewards</button>
-                  <div style="font-size: 0.75rem; opacity: 0.8;">
-                    ${nextTier.pointsNeeded - currentPoints} points to ${nextTier.name}
+              <div class="loyalty-card__title">Your Points</div>
+              <div class="loyalty-card__value">${currentPoints.toLocaleString()}</div>
+              <div class="loyalty-card__subtext">${rewards.length} rewards available</div>
+              
+              <div class="loyalty-card__actions" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+                <button class="button button--primary" id="redeem-points-btn" style="width: 100%;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle;">
+                    <path d="M20 12v10H4V12"></path>
+                    <path d="M22 7H2l10 10L22 7z"></path>
+                  </svg>
+                  Redeem Points
+                </button>
+                <button class="button button--secondary" id="view-rewards-btn" style="width: 100%;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle;">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  View All Rewards
+                </button>
+              </div>
+              
+              ${nextTier ? `
+                <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed #e5e7eb; font-size: 0.8rem; color: #6b7280;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span>Next tier (${nextTier.name}):</span>
+                    <span>${nextTier.minPoints - currentPoints} more points</span>
+                  </div>
+                  <div class="progress-bar" style="height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-top: 4px;">
+                    <div style="height: 100%; background: #4f46e5; width: ${Math.min(100, Math.max(0, (currentPoints / nextTier.minPoints) * 100))}%; transition: width 0.3s ease;"></div>
                   </div>
                 </div>
+              ` : ''}
+            </div>
               ` : ''}
             </div>
             
@@ -1201,6 +1226,23 @@ const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
         // Check for upgrades when page loads
         checkForUpgrades();
         
+        // Handle redeem points button click
+        const redeemPointsBtn = document.getElementById('redeem-points-btn');
+        if (redeemPointsBtn) {
+          redeemPointsBtn.addEventListener('click', () => {
+            const rewardsSection = document.getElementById('rewards-section');
+            if (rewardsSection) {
+              rewardsSection.style.display = 'block';
+              rewardsSection.scrollIntoView({ behavior: 'smooth' });
+              
+              // If rewards aren't loaded yet, load them
+              if (!rewardsLoaded) {
+                loadRewards(customerId);
+              }
+            }
+          });
+        }
+
         // Add highlight animation
         const style = document.createElement('style');
         style.textContent = `
