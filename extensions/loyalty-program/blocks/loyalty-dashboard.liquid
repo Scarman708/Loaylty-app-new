@@ -981,8 +981,6 @@ const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
                 </div>
               ` : ''}
             </div>
-              ` : ''}
-            </div>
             
             <div class="loyalty-card loyalty-card--secondary">
               <div class="loyalty-card__title">Member Since</div>
@@ -994,6 +992,17 @@ const baseRule = pointRules.find(r => r.isActive) || { points: 0 };
               <div class="loyalty-card__title">Membership Tier</div>
               <div class="loyalty-card__value">${currentTier}</div>
               <div class="loyalty-card__subtitle">${nextTier ? `Earn ${nextTier.pointsNeeded - currentPoints} more points for ${nextTier.name} tier` : 'You\'ve reached the highest tier!'}</div>
+            </div>
+          </div>
+          
+          <!-- Rewards Section (initially hidden) -->
+          <div id="rewards-section" class="rewards-section" style="display: none;">
+            <h2 class="rewards-section__title">Available Rewards</h2>
+            <div class="rewards-container">
+              <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading rewards...</p>
+              </div>
             </div>
           </div>
           

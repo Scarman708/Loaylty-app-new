@@ -46,7 +46,8 @@ model Shop {
   redemptionRules RedemptionRule[]
   redemptions     RewardRedemption[]
   tiers           Tier[]
-  pointRules      PointRule[] 
+  pointRules      PointRule[]
+  loyaltyPoints   LoyaltyPoint[]
   webhooks        WebhookLog[]
 
   @@index([status])
@@ -183,31 +184,105 @@ model Tier {
 
 
 model Customer {
-  id               Int                @id @default(autoincrement())
-  shopId           Int
-  shopCustomerId   BigInt
-  email            String?
-  acceptsMarketing Boolean?
-  pointBalance     Int                @default(0)
-  lifetimePoints   Int                @default(0)
-  currentTierId    Int?
-  referralCode     String?            @unique
-  referredByCode   String?    @unique
-  referredBy       Customer?  @relation("CustomerReferrals", fields: [referredByCode], references: [referredByCode])
-  referredCustomers Customer[] @relation("CustomerReferrals")
-  birthday         DateTime?
-  lastEarnedAt     DateTime?
-  lastRedeemedAt   DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  snapshots        BalanceSnapshot[]
-  currentTier      Tier?              @relation(fields: [currentTierId], references: [id])
-  shop             Shop               @relation(fields: [shopId], references: [id])
-  ledgers          PointLedger[]
-  redemptions      RewardRedemption[]
-
+  id                Int                @id @default(autoincrement())
+  shopId            Int
+  shopCustomerId    BigInt
+  email             String?
+  acceptsMarketing  Boolean?           @default(false)
+  pointBalance      Int                @default(0)
+  lifetimePoints    Int                @default(0)
+  currentTierId     Int?
+  referralCode      String?            @unique
+  referredByCode    String?            @unique
+  referredBy        Customer?          @relation("CustomerReferrals", fields: [referredByCode], references: [referralCode])
+  referredCustomers Customer[]         @relation("CustomerReferrals")
+  birthday          DateTime?
+  lastEarnedAt      DateTime?
+  lastRedeemedAt    DateTime?
+  lastActivityAt    DateTime?          @updatedAt
+  isActive          Boolean            @default(true)
+  metadata          Json?              // For any additional customer-specific loyalty data
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  
+  // Relations
+  snapshots         BalanceSnapshot[]
+  currentTier       Tier?              @relation(fields: [currentTierId], references: [id])
+  shop              Shop               @relation(fields: [shopId], references: [id])
+  ledgers           PointLedger[]
+  redemptions       RewardRedemption[]
+  pointTransactions LoyaltyPoint[]     // New relation for detailed point tracking
+  
+  // Indexes
   @@unique([shopId, shopCustomerId])
   @@index([shopId, email])
+  @@index([referralCode])
+  @@index([currentTierId])
+  @@index([pointBalance])
+  @@index([isActive])
+}
+
+// New model for tracking loyalty point transactions in detail
+model LoyaltyPoint {
+  id          Int      @id @default(autoincrement())
+  customerId  Int
+  shopId      Int
+  points      Int
+  type        String   // 'earn', 'redeem', 'expire', 'adjust', 'referral_bonus', 'signup_bonus', etc.
+  description String
+  referenceId String?  // For linking to orders, redemptions, etc.
+  expiresAt   DateTime?
+  status      String   @default("active") // 'active', 'expired', 'used', 'cancelled'
+  metadata    Json?    // Additional data like order details, source, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  customer    Customer @relation(fields: [customerId], references: [id])
+  shop        Shop     @relation(fields: [shopId], references: [id])
+  
+  // Indexes
+  @@index([customerId])
+  @@index([shopId])
+  @@index([type])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([referenceId])
+}
+
+// Enhanced RewardRedemption model with merged fields from both versions
+model RewardRedemption {
+  id           Int            @id @default(autoincrement())
+  shopId       Int
+  customerId   Int
+  pointsUsed   Int
+  rewardType   String         // 'discount', 'product', 'shipping', 'custom'
+  rewardValue  Json           // Can store different types of rewards (e.g., percentage, fixed amount, product ID)
+  status       String         @default("redeemed") // 'redeemed', 'fulfilled', 'cancelled', 'expired', 'ISSUED'
+  referenceId  String?        // For linking to orders, etc.
+  metadata     Json?          // Additional redemption details
+  processedAt  DateTime?      // When the redemption was fulfilled
+  expiresAt    DateTime?      // Optional expiration for time-limited redemptions
+  ruleId       Int?           // Reference to the redemption rule
+  code         String?        @unique // Unique code for the redemption
+  valueCents   Int?           // Value in cents for the redemption
+  orderId      BigInt?        // Reference to the order where this was used
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  
+  // Relations
+  customer     Customer       @relation(fields: [customerId], references: [id])
+  shop         Shop           @relation(fields: [shopId], references: [id])
+  rule         RedemptionRule? @relation(fields: [ruleId], references: [id])
+  
+  // Indexes
+  @@index([customerId])
+  @@index([shopId])
+  @@index([status])
+  @@index([rewardType])
+  @@index([referenceId])
+  @@index([shopId, customerId, status])
+  @@index([shopId, orderId])
 }
 
 model PointLedger {
@@ -230,26 +305,6 @@ model PointLedger {
 
   @@index([shopId, customerId, status])
   @@index([shopId, orderId])
-}
-
-model RewardRedemption {
-  id          Int            @id @default(autoincrement())
-  shopId      Int
-  customerId  Int
-  ruleId      Int
-  pointsSpent Int
-  code        String?        @unique
-  valueCents  Int?
-  status      String         @default("ISSUED")
-  orderId     BigInt?
-  metadata    Json?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  rule        RedemptionRule @relation(fields: [ruleId], references: [id])
-  customer    Customer       @relation(fields: [customerId], references: [id])
-  shop        Shop           @relation(fields: [shopId], references: [id])
-
-  @@index([shopId, customerId, status])
 }
 
 model BalanceSnapshot {
