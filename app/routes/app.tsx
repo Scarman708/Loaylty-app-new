@@ -25,7 +25,6 @@ export default function App() {
           Home
         </Link>
         <Link to="/app/dashboard">Dashboard</Link>
-        <Link to="/app/loyalty">Loyalty Program</Link>
         <Link to="/app/settings">Settings</Link>
         <Link to="/app/additional">Additional page</Link>
       </NavMenu>

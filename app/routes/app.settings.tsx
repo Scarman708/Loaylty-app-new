@@ -98,11 +98,23 @@ export const loader = async ({ request }: ActionFunctionArgs) => {
       db.programSettings.create({
         data: {
           shopId: shop.id,
-          pointsPerCurrency: 100,
+          pointsPerCurrency: 1,
+          minOrderValueCents: 1000,
+          pointsPerReview: 50,
+          maxReviewsPerMonth: 2,
+          welcomeBonusBronze: 100,
+          welcomeBonusSilver: 300,
+          welcomeBonusGold: 500,
+          birthdayPoints: 200,
+          birthdayMinLeadDays: 7,
+          pointsPerDollar: 100,
+          minRedemptionPoints: 100,
+          preventDiscountStacking: false,
+          pointsExpiryMonths: 12,
           rounding: 'nearest',
           minSubtotalCents: 0,
           earnOnShipping: false,
-          excludeDiscounts: false,
+          excludeDiscounts: true,
         },
       }),
       ...Object.values(DEFAULT_POINT_RULES).map(rule => 
@@ -287,8 +299,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const minOrderValue = formData.get('minOrderValue');
   
   const settings = {
-    pointsPerDollar: pointsPerDollar ? Number(pointsPerDollar) : 0,
-    minOrderValue: minOrderValue ? Number(minOrderValue) : 0,
+    pointsPerCurrency: pointsPerDollar ? Number(pointsPerDollar) : 1,
+    minOrderValueCents: minOrderValue ? Math.round(Number(minOrderValue) * 100) : 1000,
+    pointsPerReview: formData.get('pointsPerReview') ? Number(formData.get('pointsPerReview')) : 50,
+    maxReviewsPerMonth: formData.get('maxReviewsPerMonth') ? Number(formData.get('maxReviewsPerMonth')) : 2,
+    welcomeBonusBronze: formData.get('welcomeBonusBronze') ? Number(formData.get('welcomeBonusBronze')) : 100,
+    welcomeBonusSilver: formData.get('welcomeBonusSilver') ? Number(formData.get('welcomeBonusSilver')) : 300,
+    welcomeBonusGold: formData.get('welcomeBonusGold') ? Number(formData.get('welcomeBonusGold')) : 500,
+    birthdayPoints: formData.get('birthdayPoints') ? Number(formData.get('birthdayPoints')) : 200,
+    birthdayMinLeadDays: formData.get('birthdayMinLeadDays') ? Number(formData.get('birthdayMinLeadDays')) : 7,
+    pointsPerDollar: formData.get('pointsPerDollar') ? Number(formData.get('pointsPerDollar')) : 100,
+    minRedemptionPoints: formData.get('minRedemptionPoints') ? Number(formData.get('minRedemptionPoints')) : 100,
+    preventDiscountStacking: formData.get('preventDiscountStacking') === 'on',
+    pointsExpiryMonths: formData.get('pointsExpiryMonths') ? Number(formData.get('pointsExpiryMonths')) : 12,
     earnOnShipping: formData.get('earnOnShipping') === 'on',
     excludeDiscounts: formData.get('excludeDiscounts') === 'on',
     rounding: (formData.get('rounding') as RoundingMode) || 'nearest',
@@ -298,10 +321,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   };
 
   const errors: Record<string, string> = {};
-  if (isNaN(settings.pointsPerDollar) || settings.pointsPerDollar <= 0) {
-    errors.pointsPerDollar = 'Points per dollar must be a positive number';
+  if (isNaN(settings.pointsPerCurrency) || settings.pointsPerCurrency <= 0) {
+    errors.pointsPerCurrency = 'Points per currency must be a positive number';
   }
-  if (isNaN(settings.minOrderValue) || settings.minOrderValue < 0) {
+  if (isNaN(settings.minOrderValueCents) || settings.minOrderValueCents < 0) {
     errors.minOrderValue = 'Minimum order value cannot be negative';
   }
 
@@ -312,8 +335,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await db.programSettings.upsert({
     where: { shopId: shop.id },
     update: {
-      pointsPerCurrency: settings.pointsPerDollar,
-      minSubtotalCents: Math.round(settings.minOrderValue * 100),
+      pointsPerCurrency: settings.pointsPerCurrency,
+      minOrderValueCents: settings.minOrderValueCents,
+      pointsPerReview: settings.pointsPerReview,
+      maxReviewsPerMonth: settings.maxReviewsPerMonth,
+      welcomeBonusBronze: settings.welcomeBonusBronze,
+      welcomeBonusSilver: settings.welcomeBonusSilver,
+      welcomeBonusGold: settings.welcomeBonusGold,
+      birthdayPoints: settings.birthdayPoints,
+      birthdayMinLeadDays: settings.birthdayMinLeadDays,
+      pointsPerDollar: settings.pointsPerDollar,
+      minRedemptionPoints: settings.minRedemptionPoints,
+      preventDiscountStacking: settings.preventDiscountStacking,
+      pointsExpiryMonths: settings.pointsExpiryMonths,
       earnOnShipping: settings.earnOnShipping,
       excludeDiscounts: settings.excludeDiscounts,
       rounding: settings.rounding,
@@ -323,8 +357,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     },
     create: {
       shopId: shop.id,
-      pointsPerCurrency: settings.pointsPerDollar,
-      minSubtotalCents: Math.round(settings.minOrderValue * 100),
+      pointsPerCurrency: settings.pointsPerCurrency,
+      minOrderValueCents: settings.minOrderValueCents,
+      pointsPerReview: settings.pointsPerReview,
+      maxReviewsPerMonth: settings.maxReviewsPerMonth,
+      welcomeBonusBronze: settings.welcomeBonusBronze,
+      welcomeBonusSilver: settings.welcomeBonusSilver,
+      welcomeBonusGold: settings.welcomeBonusGold,
+      birthdayPoints: settings.birthdayPoints,
+      birthdayMinLeadDays: settings.birthdayMinLeadDays,
+      pointsPerDollar: settings.pointsPerDollar,
+      minRedemptionPoints: settings.minRedemptionPoints,
+      preventDiscountStacking: settings.preventDiscountStacking,
+      pointsExpiryMonths: settings.pointsExpiryMonths,
       earnOnShipping: settings.earnOnShipping,
       excludeDiscounts: settings.excludeDiscounts,
       rounding: settings.rounding,
@@ -382,7 +427,7 @@ export default function SettingsPage() {
                   step={1}
                   autoComplete="off"
                   value={program?.pointsPerCurrency?.toString() || '100'}
-                  error={actionData && 'errors' in actionData ? actionData.errors?.pointsPerDollar : undefined}
+                  error={actionData && 'errors' in actionData ? actionData.errors?.pointsPerCurrency : undefined}
                   helpText={`Customers will earn this many points for each ${currency} spent`}
                 />
 
@@ -393,7 +438,7 @@ export default function SettingsPage() {
                   min={0}
                   step={0.01}
                   autoComplete="off"
-                  value={program?.minSubtotalCents ? (program.minSubtotalCents / 100).toFixed(2) : '0'}
+                  value={program?.minOrderValueCents ? (program.minOrderValueCents / 100).toFixed(2) : '10.00'}
                   error={actionData && 'errors' in actionData ? actionData.errors?.minOrderValue : undefined}
                   prefix={currency}
                   helpText="Set to 0 to allow points on all orders"
@@ -430,6 +475,151 @@ export default function SettingsPage() {
                   autoComplete="off"
                   value={program?.monthlyEarnCap?.toString() || ''}
                   helpText="Maximum points a customer can earn per month"
+                />
+
+                <Divider />
+                
+                <Text as="h3" variant="headingMd">Review Settings</Text>
+                
+                <TextField
+                  label="Points per review"
+                  name="pointsPerReview"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.pointsPerReview?.toString() || '50'}
+                  helpText="Points awarded for each verified review"
+                />
+
+                <TextField
+                  label="Maximum reviews per month"
+                  name="maxReviewsPerMonth"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.maxReviewsPerMonth?.toString() || '2'}
+                  helpText="Maximum number of reviews that can earn points per month"
+                />
+
+                <Divider />
+                
+                <Text as="h3" variant="headingMd">Welcome Bonuses</Text>
+                
+                <TextField
+                  label="Bronze welcome bonus"
+                  name="welcomeBonusBronze"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.welcomeBonusBronze?.toString() || '100'}
+                  helpText="Points awarded when customer signs up (Bronze tier)"
+                />
+
+                <TextField
+                  label="Silver welcome bonus"
+                  name="welcomeBonusSilver"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.welcomeBonusSilver?.toString() || '300'}
+                  helpText="Points awarded when customer reaches Silver tier"
+                />
+
+                <TextField
+                  label="Gold welcome bonus"
+                  name="welcomeBonusGold"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.welcomeBonusGold?.toString() || '500'}
+                  helpText="Points awarded when customer reaches Gold tier"
+                />
+
+                <Divider />
+                
+                <Text as="h3" variant="headingMd">Birthday Rewards</Text>
+                
+                <TextField
+                  label="Birthday points"
+                  name="birthdayPoints"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.birthdayPoints?.toString() || '200'}
+                  helpText="Points awarded on customer's birthday"
+                />
+
+                <TextField
+                  label="Birthday lead days"
+                  name="birthdayMinLeadDays"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.birthdayMinLeadDays?.toString() || '7'}
+                  helpText="Minimum days before birthday to submit birthdate"
+                />
+
+                <Divider />
+                
+                <Text as="h3" variant="headingMd">Redemption Settings</Text>
+                
+                <TextField
+                  label="Points to currency ratio"
+                  name="pointsPerDollar"
+                  type="number"
+                  min={1}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.pointsPerDollar?.toString() || '100'}
+                  helpText={`Number of points equal to 1 ${currency}`}
+                />
+
+                <TextField
+                  label="Minimum redemption points"
+                  name="minRedemptionPoints"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.minRedemptionPoints?.toString() || '100'}
+                  helpText="Minimum points required for redemption"
+                />
+
+                <div style={{ margin: '1rem 0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      name="preventDiscountStacking"
+                      defaultChecked={program?.preventDiscountStacking || false}
+                      style={{ width: '1rem', height: '1rem' }}
+                    />
+                    <Text as="span" variant="bodyMd">Prevent stacking with discount codes</Text>
+                  </label>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    When enabled, loyalty discounts cannot be combined with other discount codes
+                  </Text>
+                </div>
+
+                <Divider />
+                
+                <Text as="h3" variant="headingMd">Point Expiration</Text>
+                
+                <TextField
+                  label="Points expire after (months)"
+                  name="pointsExpiryMonths"
+                  type="number"
+                  min={0}
+                  step={1}
+                  autoComplete="off"
+                  value={program?.pointsExpiryMonths?.toString() || '12'}
+                  helpText="Points will expire after this many months of inactivity"
                 />
 
                 <div style={{ marginBottom: '1rem' }}>
