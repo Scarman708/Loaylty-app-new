@@ -297,6 +297,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Handle main settings update
   const pointsPerDollar = formData.get('pointsPerDollar');
   const minOrderValue = formData.get('minOrderValue');
+  const redemptionPointsPerDollar = formData.get('redemptionPointsPerDollar');
   
   const settings = {
     pointsPerCurrency: pointsPerDollar ? Number(pointsPerDollar) : 1,
@@ -308,7 +309,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     welcomeBonusGold: formData.get('welcomeBonusGold') ? Number(formData.get('welcomeBonusGold')) : 500,
     birthdayPoints: formData.get('birthdayPoints') ? Number(formData.get('birthdayPoints')) : 200,
     birthdayMinLeadDays: formData.get('birthdayMinLeadDays') ? Number(formData.get('birthdayMinLeadDays')) : 7,
-    pointsPerDollar: formData.get('pointsPerDollar') ? Number(formData.get('pointsPerDollar')) : 100,
+    pointsPerDollar: redemptionPointsPerDollar ? Number(redemptionPointsPerDollar) : 100,
     minRedemptionPoints: formData.get('minRedemptionPoints') ? Number(formData.get('minRedemptionPoints')) : 100,
     preventDiscountStacking: formData.get('preventDiscountStacking') === 'on',
     pointsExpiryMonths: formData.get('pointsExpiryMonths') ? Number(formData.get('pointsExpiryMonths')) : 12,
@@ -572,7 +573,7 @@ export default function SettingsPage() {
                 
                 <TextField
                   label="Points to currency ratio"
-                  name="pointsPerDollar"
+                  name="redemptionPointsPerDollar"
                   type="number"
                   min={1}
                   step={1}
@@ -788,6 +789,23 @@ export default function SettingsPage() {
                   </Box>
                 </BlockStack>
               </Form>
+            </Card>
+          </Box>
+
+          {/* Tier Configuration Section */}
+          <Box paddingBlockStart="400">
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingLg">Tier Configuration</Text>
+                <Text as="p" variant="bodyMd">
+                  Configure loyalty tiers and their multipliers. Tiers are automatically assigned based on lifetime points.
+                </Text>
+                <Divider />
+                
+                <Text as="p" variant="bodySm" tone="subdued">
+                  <strong>Note:</strong> Tier management requires direct database access. Contact support to modify tiers.
+                </Text>
+              </BlockStack>
             </Card>
           </Box>
         </Layout.Section>
