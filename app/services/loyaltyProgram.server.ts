@@ -1,9 +1,113 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { prisma } from '~/db.server';
+import prisma from '~/db.server';
 
 type LoyaltyProgramService = ReturnType<typeof createLoyaltyProgramService>;
 
 export function createLoyaltyProgramService(db: PrismaClient) {
+  // Helper: Award Tier Upgrade Bonus
+  async function awardTierUpgradeBonus(shopId: number, customer: any, newTier: any) {
+    const settings = await db.programSettings.findUnique({ where: { shopId } });
+    if (!settings) return;
+
+    let bonusPoints = 0;
+    let bonusAwarded = false;
+
+    // Check and award Silver welcome bonus
+    if (newTier.name.toLowerCase().includes('silver') && !customer.welcomeBonusSilverAwarded) {
+      bonusPoints += settings.welcomeBonusSilver;
+      bonusAwarded = true;
+      await db.customer.update({
+        where: { id: customer.id },
+        data: { welcomeBonusSilverAwarded: true }
+      });
+    }
+    // Check and award Gold welcome bonus
+    else if (newTier.name.toLowerCase().includes('gold') && !customer.welcomeBonusGoldAwarded) {
+      bonusPoints += settings.welcomeBonusGold;
+      bonusAwarded = true;
+      await db.customer.update({
+        where: { id: customer.id },
+        data: { welcomeBonusGoldAwarded: true }
+      });
+    }
+
+    if (bonusAwarded && bonusPoints > 0) {
+      await addPoints({
+        shopId,
+        customerId: customer.id,
+        points: bonusPoints,
+        description: `Welcome bonus (${newTier.name})`,
+        type: 'WELCOME_BONUS',
+      });
+    }
+  }
+
+  // Helper: Add Points
+  async function addPoints(params: {
+    shopId: number;
+    customerId: number;
+    points: number;
+    description: string;
+    type: string;
+    referenceId?: string;
+    expiresAt?: Date;
+  }) {
+    const { shopId, customerId, points, description, type, referenceId, expiresAt } = params;
+
+    return await db.$transaction([
+      db.customer.update({
+        where: { id: customerId },
+        data: {
+          pointBalance: { increment: points },
+          lifetimePoints: { increment: points > 0 ? points : 0 },
+          lastActivityAt: new Date(),
+          ...(points > 0 && { lastEarnedAt: new Date() }),
+        },
+      }),
+      db.loyaltyPoint.create({
+        data: {
+          customerId,
+          shopId,
+          points,
+          type,
+          description,
+          referenceId,
+          expiresAt,
+          status: 'ACTIVE',
+        },
+      }),
+    ]);
+  }
+
+  // Helper: Check Review Limit
+  async function checkReviewLimit(customer: any) {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    // Reset counter if it's a new month
+    if (
+      customer.lastReviewMonth !== currentMonth ||
+      customer.lastReviewYear !== currentYear
+    ) {
+      await db.customer.update({
+        where: { id: customer.id },
+        data: {
+          currentMonthReviewCount: 0,
+          lastReviewMonth: currentMonth,
+          lastReviewYear: currentYear,
+        },
+      });
+      customer.currentMonthReviewCount = 0;
+    }
+
+    // Check if customer has reached their monthly review limit
+    const maxReviews = customer.currentTier?.maxReviewsPerMonth || 2;
+    if (customer.currentMonthReviewCount >= maxReviews) {
+      throw new Error('Monthly review limit reached');
+    }
+  }
+
   return {
     // Order Processing
     async processOrderPoints(shopId: number, customerId: number, orderSubtotal: number, orderId: string) {
@@ -76,7 +180,7 @@ export function createLoyaltyProgramService(db: PrismaClient) {
       }
 
       // Check monthly review limit
-      await this.checkReviewLimit(customer);
+      await checkReviewLimit(customer);
 
       // Calculate points with tier multiplier
       const basePoints = settings.pointsPerReview;
@@ -128,7 +232,7 @@ export function createLoyaltyProgramService(db: PrismaClient) {
       if (!customer.welcomeBonusBronzeAwarded) {
         const settings = await db.programSettings.findUnique({ where: { shopId } });
         if (settings) {
-          await this.addPoints({
+          await addPoints({
             shopId,
             customerId: customer.id,
             points: settings.welcomeBonusBronze,
@@ -185,12 +289,12 @@ export function createLoyaltyProgramService(db: PrismaClient) {
         });
 
         // Award tier upgrade bonus if applicable
-        await this.awardTierUpgradeBonus(shopId, customer, newTier);
+        await awardTierUpgradeBonus(shopId, customer, newTier);
       }
     },
 
     // Helper: Award Tier Upgrade Bonus
-    private async awardTierUpgradeBonus(shopId: number, customer: any, newTier: any) {
+    async awardTierUpgradeBonus(shopId: number, customer: any, newTier: any) {
       const settings = await db.programSettings.findUnique({ where: { shopId } });
       if (!settings) return;
 
@@ -217,7 +321,7 @@ export function createLoyaltyProgramService(db: PrismaClient) {
       }
 
       if (bonusAwarded && bonusPoints > 0) {
-        await this.addPoints({
+        await addPoints({
           shopId,
           customerId: customer.id,
           points: bonusPoints,
@@ -228,7 +332,7 @@ export function createLoyaltyProgramService(db: PrismaClient) {
     },
 
     // Check Review Limit
-    private async checkReviewLimit(customer: any) {
+    async checkReviewLimit(customer: any) {
       const now = new Date();
       const currentMonth = now.getMonth() + 1;
       const currentYear = now.getFullYear();
@@ -257,7 +361,7 @@ export function createLoyaltyProgramService(db: PrismaClient) {
     },
 
     // Add Points Helper
-    private async addPoints(params: {
+    async addPoints(params: {
       shopId: number;
       customerId: number;
       points: number;
@@ -329,7 +433,7 @@ export function createLoyaltyProgramService(db: PrismaClient) {
       expiresAt.setDate(expiresAt.getDate() + 30);
 
       // Add birthday points
-      await this.addPoints({
+      await addPoints({
         shopId,
         customerId: customer.id,
         points: settings.birthdayPoints,
