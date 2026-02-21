@@ -415,278 +415,279 @@ export default function SettingsPage() {
           )}
           
           <Card>
-            <Form method="post">
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingLg">Points Configuration</Text>
-                <Divider />
-                
-                <TextField
-                  label={`Points per ${currency} spent`}
-                  name="pointsPerDollar"
-                  type="number"
-                  min={1}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.pointsPerCurrency?.toString() || '100'}
-                  error={actionData && 'errors' in actionData ? actionData.errors?.pointsPerCurrency : undefined}
-                  helpText={`Customers will earn this many points for each ${currency} spent`}
-                />
+  <Form method="post">
+    <input type="hidden" name="_action" value="updateSettings" /> {/* Add this */}
+    <BlockStack gap="400">
+      <Text as="h2" variant="headingLg">Points Configuration</Text>
+      <Divider />
+      
+      <TextField
+        label={`Points per ${currency} spent`}
+        name="pointsPerCurrency" 
+        type="number"
+        min={1}
+        step={1}
+        autoComplete="off"
+        value={program?.pointsPerCurrency?.toString() || '100'}
+        error={actionData && 'errors' in actionData ? actionData.errors?.pointsPerCurrency : undefined}
+        helpText={`Customers will earn this many points for each ${currency} spent`}
+      />
 
-                <TextField
-                  label="Minimum order value to earn points"
-                  name="minOrderValue"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  autoComplete="off"
-                  value={program?.minOrderValueCents ? (program.minOrderValueCents / 100).toFixed(2) : '10.00'}
-                  error={actionData && 'errors' in actionData ? actionData.errors?.minOrderValue : undefined}
-                  prefix={currency}
-                  helpText="Set to 0 to allow points on all orders"
-                />
+      <TextField
+        label="Minimum order value to earn points"
+        name="minOrderValue" 
+        type="number"
+        min={0}
+        step={0.01}
+        autoComplete="off"
+        value={program?.minOrderValueCents ? (program.minOrderValueCents / 100).toFixed(2) : '10.00'}
+        error={actionData && 'errors' in actionData ? actionData.errors?.minOrderValue : undefined}
+        prefix={currency}
+        helpText="Set to 0 to allow points on all orders"
+      />
 
-                <TextField
-                  label="Maximum points per order (optional)"
-                  name="maxPointsPerOrder"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.maxPointsPerOrder?.toString() || ''}
-                  helpText="Leave empty for no limit"
-                />
+      <TextField
+        label="Maximum points per order (optional)"
+        name="maxPointsPerOrder"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.maxPointsPerOrder?.toString() || ''}
+        helpText="Leave empty for no limit"
+      />
 
-                <TextField
-                  label="Daily earn cap (optional)"
-                  name="dailyEarnCap"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.dailyEarnCap?.toString() || ''}
-                  helpText="Maximum points a customer can earn per day"
-                />
+      <TextField
+        label="Daily earn cap (optional)"
+        name="dailyEarnCap"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.dailyEarnCap?.toString() || ''}
+        helpText="Maximum points a customer can earn per day"
+      />
 
-                <TextField
-                  label="Monthly earn cap (optional)"
-                  name="monthlyEarnCap"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.monthlyEarnCap?.toString() || ''}
-                  helpText="Maximum points a customer can earn per month"
-                />
+      <TextField
+        label="Monthly earn cap (optional)"
+        name="monthlyEarnCap"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.monthlyEarnCap?.toString() || ''}
+        helpText="Maximum points a customer can earn per month"
+      />
 
-                <Divider />
-                
-                <Text as="h3" variant="headingMd">Review Settings</Text>
-                
-                <TextField
-                  label="Points per review"
-                  name="pointsPerReview"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.pointsPerReview?.toString() || '50'}
-                  helpText="Points awarded for each verified review"
-                />
+      <Divider />
+      
+      <Text as="h3" variant="headingMd">Review Settings</Text>
+      
+      <TextField
+        label="Points per review"
+        name="pointsPerReview"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.pointsPerReview?.toString() || '50'}
+        helpText="Points awarded for each verified review"
+      />
 
-                <TextField
-                  label="Maximum reviews per month"
-                  name="maxReviewsPerMonth"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.maxReviewsPerMonth?.toString() || '2'}
-                  helpText="Maximum number of reviews that can earn points per month"
-                />
+      <TextField
+        label="Maximum reviews per month"
+        name="maxReviewsPerMonth"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.maxReviewsPerMonth?.toString() || '2'}
+        helpText="Maximum number of reviews that can earn points per month"
+      />
 
-                <Divider />
-                
-                <Text as="h3" variant="headingMd">Welcome Bonuses</Text>
-                
-                <TextField
-                  label="Bronze welcome bonus"
-                  name="welcomeBonusBronze"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.welcomeBonusBronze?.toString() || '100'}
-                  helpText="Points awarded when customer signs up (Bronze tier)"
-                />
+      <Divider />
+      
+      <Text as="h3" variant="headingMd">Welcome Bonuses</Text>
+      
+      <TextField
+        label="Bronze welcome bonus"
+        name="welcomeBonusBronze"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.welcomeBonusBronze?.toString() || '100'}
+        helpText="Points awarded when customer signs up (Bronze tier)"
+      />
 
-                <TextField
-                  label="Silver welcome bonus"
-                  name="welcomeBonusSilver"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.welcomeBonusSilver?.toString() || '300'}
-                  helpText="Points awarded when customer reaches Silver tier"
-                />
+      <TextField
+        label="Silver welcome bonus"
+        name="welcomeBonusSilver"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.welcomeBonusSilver?.toString() || '300'}
+        helpText="Points awarded when customer reaches Silver tier"
+      />
 
-                <TextField
-                  label="Gold welcome bonus"
-                  name="welcomeBonusGold"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.welcomeBonusGold?.toString() || '500'}
-                  helpText="Points awarded when customer reaches Gold tier"
-                />
+      <TextField
+        label="Gold welcome bonus"
+        name="welcomeBonusGold"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.welcomeBonusGold?.toString() || '500'}
+        helpText="Points awarded when customer reaches Gold tier"
+      />
 
-                <Divider />
-                
-                <Text as="h3" variant="headingMd">Birthday Rewards</Text>
-                
-                <TextField
-                  label="Birthday points"
-                  name="birthdayPoints"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.birthdayPoints?.toString() || '200'}
-                  helpText="Points awarded on customer's birthday"
-                />
+      <Divider />
+      
+      <Text as="h3" variant="headingMd">Birthday Rewards</Text>
+      
+      <TextField
+        label="Birthday points"
+        name="birthdayPoints"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.birthdayPoints?.toString() || '200'}
+        helpText="Points awarded on customer's birthday"
+      />
 
-                <TextField
-                  label="Birthday lead days"
-                  name="birthdayMinLeadDays"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.birthdayMinLeadDays?.toString() || '7'}
-                  helpText="Minimum days before birthday to submit birthdate"
-                />
+      <TextField
+        label="Birthday lead days"
+        name="birthdayMinLeadDays"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.birthdayMinLeadDays?.toString() || '7'}
+        helpText="Minimum days before birthday to submit birthdate"
+      />
 
-                <Divider />
-                
-                <Text as="h3" variant="headingMd">Redemption Settings</Text>
-                
-                <TextField
-                  label="Points to currency ratio"
-                  name="redemptionPointsPerDollar"
-                  type="number"
-                  min={1}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.pointsPerDollar?.toString() || '100'}
-                  helpText={`Number of points equal to 1 ${currency}`}
-                />
+      <Divider />
+      
+      <Text as="h3" variant="headingMd">Redemption Settings</Text>
+      
+      <TextField
+        label="Points to currency ratio"
+        name="pointsPerDollar" 
+        type="number"
+        min={1}
+        step={1}
+        autoComplete="off"
+        value={program?.pointsPerDollar?.toString() || '100'}
+        helpText={`Number of points equal to 1 ${currency}`}
+      />
 
-                <TextField
-                  label="Minimum redemption points"
-                  name="minRedemptionPoints"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.minRedemptionPoints?.toString() || '100'}
-                  helpText="Minimum points required for redemption"
-                />
+      <TextField
+        label="Minimum redemption points"
+        name="minRedemptionPoints"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.minRedemptionPoints?.toString() || '100'}
+        helpText="Minimum points required for redemption"
+      />
 
-                <div style={{ margin: '1rem 0' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      name="preventDiscountStacking"
-                      defaultChecked={program?.preventDiscountStacking || false}
-                      style={{ width: '1rem', height: '1rem' }}
-                    />
-                    <Text as="span" variant="bodyMd">Prevent stacking with discount codes</Text>
-                  </label>
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    When enabled, loyalty discounts cannot be combined with other discount codes
-                  </Text>
-                </div>
+      <div style={{ margin: '1rem 0' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input
+            type="checkbox"
+            name="preventDiscountStacking"
+            defaultChecked={program?.preventDiscountStacking || false}
+            style={{ width: '1rem', height: '1rem' }}
+          />
+          <Text as="span" variant="bodyMd">Prevent stacking with discount codes</Text>
+        </label>
+        <Text as="p" variant="bodySm" tone="subdued">
+          When enabled, loyalty discounts cannot be combined with other discount codes
+        </Text>
+      </div>
 
-                <Divider />
-                
-                <Text as="h3" variant="headingMd">Point Expiration</Text>
-                
-                <TextField
-                  label="Points expire after (months)"
-                  name="pointsExpiryMonths"
-                  type="number"
-                  min={0}
-                  step={1}
-                  autoComplete="off"
-                  value={program?.pointsExpiryMonths?.toString() || '12'}
-                  helpText="Points will expire after this many months of inactivity"
-                />
+      <Divider />
+      
+      <Text as="h3" variant="headingMd">Point Expiration</Text>
+      
+      <TextField
+        label="Points expire after (months)"
+        name="pointsExpiryMonths"
+        type="number"
+        min={0}
+        step={1}
+        autoComplete="off"
+        value={program?.pointsExpiryMonths?.toString() || '12'}
+        helpText="Points will expire after this many months of inactivity"
+      />
 
-                <div style={{ marginBottom: '1rem' }}>
-                  <Text as="p" variant="bodyMd" fontWeight="medium">Point rounding</Text>
-                  <select 
-                    name="rounding"
-                    value={program?.rounding || 'nearest'}
-                    defaultValue={program?.rounding || 'nearest'}
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem',
-                      borderRadius: '4px',
-                      border: '1px solid #c4cdd5',
-                      marginTop: '0.5rem',
-                      marginBottom: '0.5rem'
-                    }}
-                  >
-                    <option value="nearest">Round to nearest whole number</option>
-                    <option value="up">Always round up</option>
-                    <option value="down">Always round down</option>
-                  </select>
-                  <Text as="p" variant="bodySm" tone="subdued">How to handle fractional points</Text>
-                </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <Text as="p" variant="bodyMd" fontWeight="medium">Point rounding</Text>
+        <select 
+          name="rounding"
+          value={program?.rounding || 'nearest'}
+          defaultValue={program?.rounding || 'nearest'}
+          style={{
+            width: '100%',
+            padding: '0.5rem',
+            borderRadius: '4px',
+            border: '1px solid #c4cdd5',
+            marginTop: '0.5rem',
+            marginBottom: '0.5rem'
+          }}
+        >
+          <option value="nearest">Round to nearest whole number</option>
+          <option value="up">Always round up</option>
+          <option value="down">Always round down</option>
+        </select>
+        <Text as="p" variant="bodySm" tone="subdued">How to handle fractional points</Text>
+      </div>
 
-                <div style={{ margin: '1rem 0' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      name="excludeDiscounts"
-                      defaultChecked={program?.excludeDiscounts || false}
-                      style={{ width: '1rem', height: '1rem' }}
-                    />
-                    <Text as="span" variant="bodyMd">Exclude discounts from point calculations</Text>
-                  </label>
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    When enabled, points are calculated on the pre-discount order total
-                  </Text>
-                </div>
+      <div style={{ margin: '1rem 0' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input
+            type="checkbox"
+            name="excludeDiscounts"
+            defaultChecked={program?.excludeDiscounts || false}
+            style={{ width: '1rem', height: '1rem' }}
+          />
+          <Text as="span" variant="bodyMd">Exclude discounts from point calculations</Text>
+        </label>
+        <Text as="p" variant="bodySm" tone="subdued">
+          When enabled, points are calculated on the pre-discount order total
+        </Text>
+      </div>
 
-                <div style={{ margin: '1rem 0' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      name="earnOnShipping"
-                      defaultChecked={program?.earnOnShipping || false}
-                      style={{ width: '1rem', height: '1rem' }}
-                    />
-                    <Text as="span" variant="bodyMd">Award points on shipping costs</Text>
-                  </label>
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    When enabled, shipping costs will be included in point calculations
-                  </Text>
-                </div>
+      <div style={{ margin: '1rem 0' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input
+            type="checkbox"
+            name="earnOnShipping"
+            defaultChecked={program?.earnOnShipping || false}
+            style={{ width: '1rem', height: '1rem' }}
+          />
+          <Text as="span" variant="bodyMd">Award points on shipping costs</Text>
+        </label>
+        <Text as="p" variant="bodySm" tone="subdued">
+          When enabled, shipping costs will be included in point calculations
+        </Text>
+      </div>
 
-                <Divider />
-                
-                <Box paddingBlockStart="400">
-                  <Button submit variant="primary" loading={isSettingsSubmitting}>
-                    Save Settings
-                  </Button>
-                </Box>
-              </BlockStack>
-            </Form>
-          </Card>
+      <Divider />
+      
+      <Box paddingBlockStart="400">
+        <Button submit variant="primary" loading={isSettingsSubmitting}>
+          Save Settings
+        </Button>
+      </Box>
+    </BlockStack>
+  </Form>
+</Card>
           
-          {/* Point Rules Section */}
+          {/* Point Rules Section
           <Box paddingBlockStart="400">
             <Card>
               <Form method="post">
@@ -790,7 +791,7 @@ export default function SettingsPage() {
                 </BlockStack>
               </Form>
             </Card>
-          </Box>
+          </Box> */}
 
           {/* Tier Configuration Section */}
           <Box paddingBlockStart="400">
@@ -802,9 +803,7 @@ export default function SettingsPage() {
                 </Text>
                 <Divider />
                 
-                <Text as="p" variant="bodySm" tone="subdued">
-                  <strong>Note:</strong> Tier management requires direct database access. Contact support to modify tiers.
-                </Text>
+                
               </BlockStack>
             </Card>
           </Box>
