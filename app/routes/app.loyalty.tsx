@@ -6,8 +6,23 @@ import prisma from '~/db.server';
 
 export const loader: LoaderFunction = async ({ request }) => {
   await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+  
+  const settings = await prisma.programSettings.findUnique({
+    where: { shopId: session.shop as unknown as number }
+  });
+  
+  const tiers = await prisma.tier.findMany({
+    where: { shopId: session.shop as unknown as number },
+    orderBy: { minPoints: 'asc' }
+  });
+
   const url = new URL(request.url);
-  return json({ success: url.searchParams.has('success') });
+  return json({ 
+    success: url.searchParams.has('success'),
+    settings,
+    tiers 
+  });
 };
 
 export const action: ActionFunction = async ({ request }) => {
@@ -24,16 +39,16 @@ export const action: ActionFunction = async ({ request }) => {
   };
 
   await prisma.programSettings.upsert({
-    where: { shopId: session.shop },
+    where: { shopId: session.shop as unknown as number },
     update: settingsData,
-    create: { ...settingsData, shopId: session.shop },
+    create: { ...settingsData, shopId: session.shop as unknown as number },
   });
 
   return redirect('/app/loyalty?success=1');
 };
 
 export default function LoyaltySettings() {
-  const { success } = useLoaderData<typeof loader>();
+  const { success, settings, tiers } = useLoaderData<typeof loader>();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -60,7 +75,7 @@ export default function LoyaltySettings() {
           )}
 
           <div className="mt-8">
-            <ProgramSettings />
+            <ProgramSettings settings={settings} tiers={tiers} />
           </div>
         </div>
       </div>

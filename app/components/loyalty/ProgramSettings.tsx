@@ -1,25 +1,11 @@
 import { Form, useLoaderData, useNavigation } from '@remix-run/react';
-import type { LoaderFunction } from '@remix-run/node';
-import { json } from '@remix-run/node';
-import { authenticate } from '~/shopify.server';
-import prisma from '~/db.server';
 
-export const loader: LoaderFunction = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const settings = await prisma.programSettings.findUnique({
-    where: { shopId: session.shop as unknown as number }
-  });
-  
-  const tiers = await prisma.tier.findMany({
-    where: { shopId: session.shop as unknown as number },
-    orderBy: { minPoints: 'asc' }
-  });
+interface ProgramSettingsProps {
+  settings?: any;
+  tiers?: any[];
+}
 
-  return json({ settings, tiers });
-};
-
-export default function ProgramSettings() {
-  const { settings, tiers } = useLoaderData<typeof loader>();
+export default function ProgramSettings({ settings, tiers = [] }: ProgramSettingsProps) {
   const navigation = useNavigation();
   const isSaving = navigation.state === 'submitting';
 
