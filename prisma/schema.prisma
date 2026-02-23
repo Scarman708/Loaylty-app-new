@@ -56,13 +56,13 @@ model Shop {
 model ProgramSettings {
   id                Int           @id @default(autoincrement())
   shopId            Int           @unique
-  pointsPerCurrency Int           @default(10)
+  pointsPerCurrency Int           @default(1)
   rounding          RoundingMode  @default(nearest)
-  excludeDiscounts  Boolean       @default(false)
+  excludeDiscounts  Boolean       @default(true)
   earnOnShipping    Boolean       @default(false)
   earnOnTaxes       Boolean       @default(false)
   holdEvent         EarnHoldEvent @default(PAID)
-  minSubtotalCents  Int           @default(0)
+  minSubtotalCents  Int           @default(1000)
   maxPointsPerOrder Int?
   dailyEarnCap      Int?
   monthlyEarnCap    Int?
@@ -70,6 +70,43 @@ model ProgramSettings {
   referrerBonus     Int?
   refereeBonus      Int?
   status            ProgramStatus @default(ACTIVE)
+  
+  // Review Points Rules
+  reviewBasePoints  Int           @default(50)
+  maxReviewsPerMonth Int          @default(2)
+  
+  // Welcome Bonuses
+  bronzeSignupBonus Int           @default(100)
+  silverUnlockBonus Int           @default(300)
+  goldUnlockBonus   Int           @default(500)
+  
+  // Birthday Reward
+  birthdayPoints     Int           @default(200)
+  birthdayExpiryDays Int           @default(30)
+  birthdayMinDays    Int           @default(7)
+  
+  // Tier Multipliers
+  bronzeSpendMultiplier Float       @default(1.0)
+  bronzeReviewMultiplier Float      @default(1.0)
+  silverSpendMultiplier Float       @default(1.25)
+  silverReviewMultiplier Float      @default(1.5)
+  goldSpendMultiplier   Float       @default(1.5)
+  goldReviewMultiplier   Float       @default(2.0)
+  
+  // Tier Qualification
+  bronzeThreshold   Int           @default(0)
+  silverThreshold   Int           @default(2000)
+  goldThreshold     Int           @default(5000)
+  
+  // Redemption Rules
+  redemptionRate    Int           @default(100) // points per unit
+  redemptionValue   Int           @default(5)   // currency units per 100 points
+  minRedemption     Int           @default(100)
+  preventStacking   Boolean       @default(false)
+  
+  // Points Expiration
+  pointsExpiryMonths Int          @default(12)
+  
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   shop              Shop          @relation(fields: [shopId], references: [id])
