@@ -413,7 +413,6 @@ export default function SettingsPage() {
               </Banner>
             </Box>
           )}
-          
           <Card>
   <Form method="post">
     <input type="hidden" name="_action" value="updateSettings" /> {/* Add this */}
