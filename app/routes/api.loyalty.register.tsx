@@ -3,6 +3,7 @@ import prisma from "~/db.server";
 import type { ActionFunctionArgs } from "@remix-run/node";
 import crypto from "crypto";
 import { syncCustomerToShopify } from "~/utils/shopifyCustomer.server";
+import { loyaltyProgram } from "~/services/loyaltyProgram.server";
 
 const corsHeaders = (origin: string) => ({
   'Access-Control-Allow-Origin': origin,
@@ -186,18 +187,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (existingCustomer) {
       console.log("ℹ️ Customer already registered - ID:", existingCustomer.id);
       
+      const serializedCustomer = {
+        id: existingCustomer.id.toString(),
+        email: existingCustomer.email,
+        shopCustomerId: existingCustomer.shopCustomerId.toString(),
+        pointBalance: existingCustomer.pointBalance.toString(),
+        lifetimePoints: existingCustomer.lifetimePoints.toString(),
+        tier: existingCustomer.currentTier?.name || 'Member'
+      };
+      
       return json(
         { 
           success: true, 
           message: "You're already part of our loyalty program!",
           alreadyRegistered: true,
-          customer: {
-            id: existingCustomer.id.toString(),
-            email: existingCustomer.email,
-            points: existingCustomer.pointBalance.toString(),
-            lifetimePoints: existingCustomer.lifetimePoints.toString(),
-            tier: existingCustomer.currentTier?.name || 'Member'
-          }
+          customer: serializedCustomer
         },
         { headers: corsHeaders(origin) }
       );
@@ -240,17 +244,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         referredByCode: referralCode || null,
         currentTierId: defaultTier?.id || null,
         pointBalance: 0,
-        lifetimePoints: 0
+        lifetimePoints: 0,
+        isActive: true,
+        currentMonthReviewCount: 0,
       },
       include: {
-        currentTier: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
+    currentTier: {
+      select: {
+        id: true,
+        name: true,
+        minPoints: true
       }
+    }
+  }
     });
+    
     await syncCustomerToShopify(shop, customer.id.toString());
 
     console.log("✅ Customer created successfully!");
@@ -258,20 +266,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log("   - Points Balance:", customer.pointBalance);
     console.log("   - Tier:", customer.currentTier?.name || 'None');
 
+    // Award welcome bonus for loyalty program registration
+    try {
+      await loyaltyProgram.awardWelcomeBonus(
+        shopRecord.id,
+        customer.id
+      );
+      console.log("🎁 Welcome bonus awarded successfully!");
+    } catch (bonusError) {
+      console.error("❌ Failed to award welcome bonus:", bonusError);
+    }
+
     const serializedCustomer = {
       id: customer.id.toString(),
       email: customer.email,
       shopCustomerId: customer.shopCustomerId.toString(),
       pointBalance: customer.pointBalance.toString(),
       lifetimePoints: customer.lifetimePoints.toString(),
-      tier: customer.currentTier?.name || 'No tier',
+      tier:customer.currentTier?.name || 'No tier',
       acceptsMarketing: customer.acceptsMarketing
     };
 
     return json(
       { 
         success: true,
-        message: "🎉 Successfully joined the loyalty program!",
+        message: "🎉 Successfully joined loyalty program!",
         customer: serializedCustomer
       },
       { headers: corsHeaders(origin) }
