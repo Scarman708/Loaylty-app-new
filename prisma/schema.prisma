@@ -41,87 +41,75 @@ model Shop {
   earningRules    EarningRule[]
   expiryPolicy    ExpiryPolicy?
   goals           GoalConfig?
+  loyaltyPoints   LoyaltyPoint[]
   ledgers         PointLedger[]
+  pointRules      PointRule[]
   program         ProgramSettings?
   redemptionRules RedemptionRule[]
   redemptions     RewardRedemption[]
   tiers           Tier[]
-  pointRules      PointRule[]
-  loyaltyPoints   LoyaltyPoint[]
   webhooks        WebhookLog[]
 
   @@index([status])
 }
 
 model ProgramSettings {
-  id                    Int           @id @default(autoincrement())
-  shopId                Int           @unique
-  pointsPerCurrency     Int           @default(1)
-  minOrderValueCents    Int           @default(1000) // 10.00 in cents
-  rounding              RoundingMode  @default(nearest)
-  excludeDiscounts      Boolean       @default(true)
-  earnOnShipping        Boolean       @default(false)
-  earnOnTaxes           Boolean       @default(false)
-  holdEvent             EarnHoldEvent @default(PAID)
-  maxPointsPerOrder     Int?
-  dailyEarnCap          Int?
-  monthlyEarnCap        Int?
-  
-  // Review settings
-  pointsPerReview       Int           @default(50)
-  maxReviewsPerMonth    Int           @default(2)
-  
-  // Welcome bonuses
-  welcomeBonusBronze    Int           @default(100)
-  welcomeBonusSilver    Int           @default(300)
-  welcomeBonusGold      Int           @default(500)
-  
-  // Birthday rewards
-  birthdayPoints        Int           @default(200)
-  birthdayMinLeadDays   Int           @default(7)
-  
-  // Redemption settings
-  pointsPerDollar       Int           @default(100) // 100 points = 1.00 currency unit
-  minRedemptionPoints   Int           @default(100)
-  preventDiscountStacking Boolean     @default(false)
-  
-  // Expiration
-  pointsExpiryMonths    Int           @default(12)
-  
-  // Legacy fields (deprecated)
-  minSubtotalCents      Int           @default(0)
-  referralsEnabled      Boolean       @default(false)
-  referrerBonus         Int?
-  refereeBonus          Int?
-  
-  status                ProgramStatus @default(ACTIVE)
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-  shop                  Shop          @relation(fields: [shopId], references: [id])
+  id                     Int           @id @default(autoincrement())
+  shopId                 Int           @unique
+  pointsPerCurrency      Int           @default(1)
+  rounding               RoundingMode  @default(nearest)
+  excludeDiscounts       Boolean       @default(true)
+  earnOnShipping         Boolean       @default(false)
+  earnOnTaxes            Boolean       @default(false)
+  holdEvent              EarnHoldEvent @default(PAID)
+  minSubtotalCents       Int           @default(1000)
+  maxPointsPerOrder      Int?
+  dailyEarnCap           Int?
+  monthlyEarnCap         Int?
+  referralsEnabled       Boolean       @default(false)
+  referrerBonus          Int?
+  refereeBonus           Int?
+  status                 ProgramStatus @default(ACTIVE)
+  reviewBasePoints       Int           @default(50)
+  maxReviewsPerMonth     Int           @default(2)
+  bronzeSignupBonus      Int           @default(100)
+  silverUnlockBonus      Int           @default(300)
+  goldUnlockBonus        Int           @default(500)
+  birthdayPoints         Int           @default(200)
+  birthdayExpiryDays     Int           @default(30)
+  birthdayMinDays        Int           @default(7)
+  bronzeSpendMultiplier  Float         @default(1.0)
+  bronzeReviewMultiplier Float         @default(1.0)
+  silverSpendMultiplier  Float         @default(1.25)
+  silverReviewMultiplier Float         @default(1.5)
+  goldSpendMultiplier    Float         @default(1.5)
+  goldReviewMultiplier   Float         @default(2.0)
+  bronzeThreshold        Int           @default(0)
+  silverThreshold        Int           @default(2000)
+  goldThreshold          Int           @default(5000)
+  redemptionRate         Int           @default(100)
+  redemptionValue        Int           @default(5)
+  minRedemption          Int           @default(100)
+  preventStacking        Boolean       @default(false)
+  pointsExpiryMonths     Int           @default(12)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  shop                   Shop          @relation(fields: [shopId], references: [id])
 }
 
 model PointRule {
-  id          Int             @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   shopId      Int
   type        PointRuleType
   points      Int
   description String
-  isActive    Boolean         @default(true)
-  sortOrder   Int             @default(0)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  shop        Shop            @relation(fields: [shopId], references: [id])
+  isActive    Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  shop        Shop          @relation(fields: [shopId], references: [id])
 
   @@unique([shopId, type])
-}
-
-enum PointRuleType {
-  PURCHASE
-  SIGNUP
-  BIRTHDAY
-  REVIEW
-  REFERRAL
-  SOCIAL_SHARE
 }
 
 model ExpiryPolicy {
@@ -186,35 +174,25 @@ model RedemptionRule {
 }
 
 model Tier {
-  id                    Int            @id @default(autoincrement())
-  shopId                Int
-  name                  String
-  minPoints             Int            @default(0)
-  color                 String?
-  icon                  String?
-  windowType            TierWindowType @default(LIFETIME)
-  windowDays            Int?
-  downgradeGraceDays    Int?
-  benefits              Json?
-  
-  // Multipliers
-  spendMultiplier       Float          @default(1.0)
-  reviewMultiplier      Float          @default(1.0)
-  maxReviewsPerMonth    Int            @default(2)
-  
-  // Legacy field (deprecated)
-  multiplier            Float?
-  
-  sortOrder             Int            @default(100)
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  Customer              Customer[]
-  shop                  Shop           @relation(fields: [shopId], references: [id])
+  id                 Int            @id @default(autoincrement())
+  shopId             Int
+  name               String
+  minPoints          Int            @default(0)
+  color              String?
+  icon               String?
+  windowType         TierWindowType @default(LIFETIME)
+  windowDays         Int?
+  downgradeGraceDays Int?
+  benefits           Json?
+  sortOrder          Int            @default(100)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  multiplier         Float?
+  Customer           Customer[]
+  shop               Shop           @relation(fields: [shopId], references: [id])
 
   @@index([shopId, sortOrder])
 }
-
-
 
 model Customer {
   id                Int                @id @default(autoincrement())
@@ -225,47 +203,25 @@ model Customer {
   pointBalance      Int                @default(0)
   lifetimePoints    Int                @default(0)
   currentTierId     Int?
-  
-  // Loyalty tracking
-  lastActivityAt     DateTime?         // Last activity timestamp
-  lastEarnedAt       DateTime?         // Last points earned
-  lastRedeemedAt     DateTime?         // Last points redemption
-  lastReviewPointsAt DateTime?         // Last review points awarded
-  
-  // Welcome bonuses tracking
-  welcomeBonusBronzeAwarded  Boolean   @default(false)
-  welcomeBonusSilverAwarded  Boolean   @default(false)
-  welcomeBonusGoldAwarded    Boolean   @default(false)
-  
-  // Birthday tracking
-  birthday                  DateTime?
-  lastBirthdayPointsAt      DateTime?  // When birthday points were last awarded
-  nextBirthdayPointsAt      DateTime?  // When next birthday points can be awarded
-  
-  // Monthly review tracking
-  currentMonthReviewCount   Int        @default(0)
-  lastReviewMonth           Int?       // Month of last review (1-12)
-  lastReviewYear            Int?       // Year of last review
-  
-  // Referral program (legacy)
   referralCode      String?            @unique
   referredByCode    String?            @unique
-  referredBy        Customer?          @relation("CustomerReferrals", fields: [referredByCode], references: [referralCode])
-  referredCustomers Customer[]         @relation("CustomerReferrals")
+  birthday          DateTime?
+  lastEarnedAt      DateTime?
+  lastRedeemedAt    DateTime?
+  lastActivityAt    DateTime?
   isActive          Boolean            @default(true)
-  metadata          Json?              // For any additional customer-specific loyalty data
+  metadata          Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  
-  // Relations
   snapshots         BalanceSnapshot[]
-  currentTier       Tier?              @relation(fields: [currentTierId], references: [id])
   shop              Shop               @relation(fields: [shopId], references: [id])
+  currentTier       Tier?              @relation(fields: [currentTierId], references: [id])
+  referredBy        Customer?          @relation("CustomerReferrals", fields: [referredByCode], references: [referralCode])
+  referredCustomers Customer?          @relation("CustomerReferrals")
+  pointTransactions LoyaltyPoint[]
   ledgers           PointLedger[]
   redemptions       RewardRedemption[]
-  pointTransactions LoyaltyPoint[]     // New relation for detailed point tracking
-  
-  // Indexes
+
   @@unique([shopId, shopCustomerId])
   @@index([shopId, email])
   @@index([referralCode])
@@ -274,26 +230,22 @@ model Customer {
   @@index([isActive])
 }
 
-// New model for tracking loyalty point transactions in detail
 model LoyaltyPoint {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   customerId  Int
   shopId      Int
   points      Int
-  type        String   // 'earn', 'redeem', 'expire', 'adjust', 'referral_bonus', 'signup_bonus', etc.
+  type        String
   description String
-  referenceId String?  // For linking to orders, redemptions, etc.
+  referenceId String?
   expiresAt   DateTime?
-  status      String   @default("active") // 'active', 'expired', 'used', 'cancelled'
-  metadata    Json?    // Additional data like order details, source, etc.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Relations
-  customer    Customer @relation(fields: [customerId], references: [id])
-  shop        Shop     @relation(fields: [shopId], references: [id])
-  
-  // Indexes
+  status      String    @default("active")
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  shop        Shop      @relation(fields: [shopId], references: [id])
+  customer    Customer  @relation(fields: [customerId], references: [id])
+
   @@index([customerId])
   @@index([shopId])
   @@index([type])
@@ -302,32 +254,28 @@ model LoyaltyPoint {
   @@index([referenceId])
 }
 
-// Enhanced RewardRedemption model with merged fields from both versions
 model RewardRedemption {
-  id           Int            @id @default(autoincrement())
-  shopId       Int
-  customerId   Int
-  pointsUsed   Int
-  rewardType   String         // 'discount', 'product', 'shipping', 'custom'
-  rewardValue  Json           // Can store different types of rewards (e.g., percentage, fixed amount, product ID)
-  status       String         @default("redeemed") // 'redeemed', 'fulfilled', 'cancelled', 'expired', 'ISSUED'
-  referenceId  String?        // For linking to orders, etc.
-  metadata     Json?          // Additional redemption details
-  processedAt  DateTime?      // When the redemption was fulfilled
-  expiresAt    DateTime?      // Optional expiration for time-limited redemptions
-  ruleId       Int?           // Reference to the redemption rule
-  code         String?        @unique // Unique code for the redemption
-  valueCents   Int?           // Value in cents for the redemption
-  orderId      BigInt?        // Reference to the order where this was used
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  
-  // Relations
-  customer     Customer       @relation(fields: [customerId], references: [id])
-  shop         Shop           @relation(fields: [shopId], references: [id])
-  rule         RedemptionRule? @relation(fields: [ruleId], references: [id])
-  
-  // Indexes
+  id          Int             @id @default(autoincrement())
+  shopId      Int
+  customerId  Int
+  pointsUsed  Int
+  rewardType  String
+  rewardValue Json
+  status      String          @default("redeemed")
+  referenceId String?
+  metadata    Json?
+  processedAt DateTime?
+  expiresAt   DateTime?
+  ruleId      Int?
+  code        String?         @unique
+  valueCents  Int?
+  orderId     BigInt?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  rule        RedemptionRule? @relation(fields: [ruleId], references: [id])
+  shop        Shop            @relation(fields: [shopId], references: [id])
+  customer    Customer        @relation(fields: [customerId], references: [id])
+
   @@index([customerId])
   @@index([shopId])
   @@index([status])
@@ -399,6 +347,15 @@ model WebhookLog {
   shop       Shop     @relation(fields: [shopId], references: [id])
 
   @@index([shopId, topic, createdAt])
+}
+
+enum PointRuleType {
+  PURCHASE
+  SIGNUP
+  BIRTHDAY
+  REVIEW
+  REFERRAL
+  SOCIAL_SHARE
 }
 
 enum ProgramStatus {
