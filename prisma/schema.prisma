@@ -184,13 +184,10 @@ model Tier {
   windowDays         Int?
   downgradeGraceDays Int?
   benefits           Json?
-  spendMultiplier    Float          @default(1.0)
-  reviewMultiplier   Float          @default(1.0)
-  maxReviewsPerMonth Int            @default(2)
-  multiplier         Float?
   sortOrder          Int            @default(100)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
+  multiplier         Float?
   Customer           Customer[]
   shop               Shop           @relation(fields: [shopId], references: [id])
 
@@ -198,41 +195,32 @@ model Tier {
 }
 
 model Customer {
-  id                        Int                @id @default(autoincrement())
-  shopId                    Int
-  shopCustomerId            BigInt
-  email                     String?
-  acceptsMarketing          Boolean?           @default(false)
-  pointBalance              Int                @default(0)
-  lifetimePoints            Int                @default(0)
-  currentTierId             Int?
-  lastActivityAt            DateTime?
-  lastEarnedAt              DateTime?
-  lastRedeemedAt            DateTime?
-  lastReviewPointsAt        DateTime?
-  welcomeBonusBronzeAwarded Boolean            @default(false)
-  welcomeBonusSilverAwarded Boolean            @default(false)
-  welcomeBonusGoldAwarded   Boolean            @default(false)
-  birthday                  DateTime?
-  lastBirthdayPointsAt      DateTime?
-  nextBirthdayPointsAt      DateTime?
-  currentMonthReviewCount   Int                @default(0)
-  lastReviewMonth           Int?
-  lastReviewYear            Int?
-  referralCode              String?            @unique
-  referredByCode            String?            @unique
-  isActive                  Boolean            @default(true)
-  metadata                  Json?
-  createdAt                 DateTime           @default(now())
-  updatedAt                 DateTime           @updatedAt
-  snapshots                 BalanceSnapshot[]
-  shop                      Shop               @relation(fields: [shopId], references: [id])
-  currentTier               Tier?              @relation(fields: [currentTierId], references: [id])
-  referredBy                Customer?          @relation("CustomerReferrals", fields: [referredByCode], references: [referralCode])
-  referredCustomers         Customer?          @relation("CustomerReferrals")
-  pointTransactions         LoyaltyPoint[]
-  ledgers                   PointLedger[]
-  redemptions               RewardRedemption[]
+  id                Int                @id @default(autoincrement())
+  shopId            Int
+  shopCustomerId    BigInt
+  email             String?
+  acceptsMarketing  Boolean?           @default(false)
+  pointBalance      Int                @default(0)
+  lifetimePoints    Int                @default(0)
+  currentTierId     Int?
+  referralCode      String?            @unique
+  referredByCode    String?            @unique
+  birthday          DateTime?
+  lastEarnedAt      DateTime?
+  lastRedeemedAt    DateTime?
+  lastActivityAt    DateTime?
+  isActive          Boolean            @default(true)
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  snapshots         BalanceSnapshot[]
+  referredBy        Customer?          @relation("CustomerReferrals", fields: [referredByCode], references: [referralCode])
+  referredCustomers Customer?          @relation("CustomerReferrals")
+  currentTier       Tier?              @relation(fields: [currentTierId], references: [id])
+  shop              Shop               @relation(fields: [shopId], references: [id])
+  pointTransactions LoyaltyPoint[]
+  ledgers           PointLedger[]
+  redemptions       RewardRedemption[]
 
   @@unique([shopId, shopCustomerId])
   @@index([shopId, email])
