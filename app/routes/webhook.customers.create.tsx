@@ -10,6 +10,10 @@ export const action: ActionFunction = async ({ request }) => {
     return json({ received: true });
   }
 
+  if (!session) {
+    return json({ error: 'Session not found' }, { status: 500 });
+  }
+
   try {
     const customerId = payload.id.toString();
     

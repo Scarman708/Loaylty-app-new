@@ -272,7 +272,7 @@ console.log("   - Tier:", customer.currentTier?.name || 'None');
 try {
   await loyaltyProgram.awardWelcomeBonus(
     shopRecord.id,
-    customer.id
+    parseInt(customer.shopCustomerId.toString()),
   );
   console.log("🎁 Welcome bonus awarded successfully!");
 } catch (bonusError) {
