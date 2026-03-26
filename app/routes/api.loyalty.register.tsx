@@ -5,6 +5,9 @@ import crypto from "crypto";
 import { syncCustomerToShopify } from "~/utils/shopifyCustomer.server";
 import { loyaltyProgram } from "~/services/loyaltyProgram.server";
 
+// Add console type declarations
+declare const console: Console;
+
 const corsHeaders = (origin: string) => ({
   'Access-Control-Allow-Origin': origin,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -246,7 +249,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         pointBalance: 0,
         lifetimePoints: 0,
         isActive: true,
-        currentMonthReviewCount: 0,
       },
       include: {
     currentTier: {
@@ -283,22 +285,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shopCustomerId: customer.shopCustomerId.toString(),
       pointBalance: customer.pointBalance.toString(),
       lifetimePoints: customer.lifetimePoints.toString(),
-      tier:customer.currentTier?.name || 'No tier',
+      tier: customer.currentTier?.name || 'No tier',
       acceptsMarketing: customer.acceptsMarketing
     };
 
     return json(
       { 
         success: true,
-        message: "🎉 Successfully joined loyalty program!",
-        customer: serializedCustomer
+        message: "Successfully joined loyalty program!",
+        customer: {
+          id: serializedCustomer.id,
+          email: serializedCustomer.email,
+          shopCustomerId: serializedCustomer.shopCustomerId,
+          pointBalance: serializedCustomer.pointBalance,
+          lifetimePoints: serializedCustomer.lifetimePoints,
+          tier: serializedCustomer.tier,
+          acceptsMarketing: serializedCustomer.acceptsMarketing
+        }
       },
       { headers: corsHeaders(origin) }
     );
-    
   } catch (error) {
     console.error('❌ ERROR in loyalty registration:');
-    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.error('Error type:', error?.constructor?.name);
     console.error('Error message:', error instanceof Error ? error.message : String(error));
     
@@ -321,7 +330,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
     
-    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     return json(
       { 
