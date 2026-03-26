@@ -263,48 +263,73 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     
     await syncCustomerToShopify(shop, customer.id.toString());
 
-    console.log("✅ Customer created successfully!");
-    console.log("   - Customer DB ID:", customer.id);
-    console.log("   - Points Balance:", customer.pointBalance);
-    console.log("   - Tier:", customer.currentTier?.name || 'None');
+   console.log("✅ Customer created successfully!");
+console.log("   - Customer DB ID:", customer.id);
+console.log("   - Points Balance:", customer.pointBalance);
+console.log("   - Tier:", customer.currentTier?.name || 'None');
 
-    // Award welcome bonus for loyalty program registration
-    try {
-      await loyaltyProgram.awardWelcomeBonus(
-        shopRecord.id,
-        customer.id
-      );
-      console.log("🎁 Welcome bonus awarded successfully!");
-    } catch (bonusError) {
-      console.error("❌ Failed to award welcome bonus:", bonusError);
+// 🎁 Award welcome bonus
+try {
+  await loyaltyProgram.awardWelcomeBonus(
+    shopRecord.id,
+    customer.id
+  );
+  console.log("🎁 Welcome bonus awarded successfully!");
+} catch (bonusError) {
+  console.error("❌ Failed to award welcome bonus:", bonusError);
+}
+
+/* -------------------------------------------------- */
+/* 🔥 IMPORTANT FIX: Reload updated customer from DB  */
+/* -------------------------------------------------- */
+
+const updatedCustomer = await prisma.customer.findUnique({
+  where: { id: customer.id },
+  include: {
+    currentTier: {
+      select: {
+        id: true,
+        name: true,
+        minPoints: true
+      }
     }
+  }
+});
 
-    const serializedCustomer = {
-      id: customer.id.toString(),
-      email: customer.email,
-      shopCustomerId: customer.shopCustomerId.toString(),
-      pointBalance: customer.pointBalance.toString(),
-      lifetimePoints: customer.lifetimePoints.toString(),
-      tier: customer.currentTier?.name || 'No tier',
-      acceptsMarketing: customer.acceptsMarketing
-    };
+if (!updatedCustomer) {
+  console.error("❌ Customer disappeared after creation!");
+  return json(
+    { error: "Customer creation failed unexpectedly" },
+    { status: 500, headers: corsHeaders(origin) }
+  );
+}
 
-    return json(
-      { 
-        success: true,
-        message: "Successfully joined loyalty program!",
-        customer: {
-          id: serializedCustomer.id,
-          email: serializedCustomer.email,
-          shopCustomerId: serializedCustomer.shopCustomerId,
-          pointBalance: serializedCustomer.pointBalance,
-          lifetimePoints: serializedCustomer.lifetimePoints,
-          tier: serializedCustomer.tier,
-          acceptsMarketing: serializedCustomer.acceptsMarketing
-        }
-      },
-      { headers: corsHeaders(origin) }
-    );
+console.log("🔄 Reloaded customer after bonus:");
+console.log("   - New Points Balance:", updatedCustomer.pointBalance);
+console.log("   - Lifetime Points:", updatedCustomer.lifetimePoints);
+
+/* -------------------------------------------------- */
+/* 📦 Serialize UPDATED customer (not stale one)      */
+/* -------------------------------------------------- */
+
+const serializedCustomer = {
+  id: updatedCustomer.id.toString(),
+  email: updatedCustomer.email,
+  shopCustomerId: updatedCustomer.shopCustomerId.toString(),
+  pointBalance: updatedCustomer.pointBalance.toString(),
+  lifetimePoints: updatedCustomer.lifetimePoints.toString(),
+  tier: updatedCustomer.currentTier?.name || 'No tier',
+  acceptsMarketing: updatedCustomer.acceptsMarketing
+};
+
+return json(
+  { 
+    success: true,
+    message: "Successfully joined loyalty program!",
+    customer: serializedCustomer
+  },
+  { headers: corsHeaders(origin) }
+);
   } catch (error) {
     console.error('❌ ERROR in loyalty registration:');
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
