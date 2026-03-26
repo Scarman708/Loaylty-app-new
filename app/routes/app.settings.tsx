@@ -1,5 +1,7 @@
 import { json, type ActionFunctionArgs, redirect } from '@remix-run/node';
-import { Form, useLoaderData, useActionData, useNavigation } from '@remix-run/react';
+import { Form, useLoaderData, useActionData, useNavigation} from '@remix-run/react';
+import { useState } from "react";
+import React from 'react';
 import { 
   Card, 
   Layout, 
@@ -397,6 +399,27 @@ export default function SettingsPage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   
+  // Form state management
+  const [pointsPerCurrency, setPointsPerCurrency] = useState(program?.pointsPerCurrency?.toString() || '1');
+  const [minOrderValue, setMinOrderValue] = useState(program?.minSubtotalCents ? (program.minSubtotalCents / 100).toFixed(2) : '10.00');
+  const [maxPointsPerOrder, setMaxPointsPerOrder] = useState(program?.maxPointsPerOrder?.toString() || '');
+  const [dailyEarnCap, setDailyEarnCap] = useState(program?.dailyEarnCap?.toString() || '');
+  const [monthlyEarnCap, setMonthlyEarnCap] = useState(program?.monthlyEarnCap?.toString() || '');
+  const [reviewBasePoints, setReviewBasePoints] = useState(program?.reviewBasePoints?.toString() || '50');
+  const [maxReviewsPerMonth, setMaxReviewsPerMonth] = useState(program?.maxReviewsPerMonth?.toString() || '2');
+  const [bronzeSignupBonus, setBronzeSignupBonus] = useState(program?.bronzeSignupBonus?.toString() || '100');
+  const [silverUnlockBonus, setSilverUnlockBonus] = useState(program?.silverUnlockBonus?.toString() || '300');
+  const [goldUnlockBonus, setGoldUnlockBonus] = useState(program?.goldUnlockBonus?.toString() || '500');
+  const [birthdayPoints, setBirthdayPoints] = useState(program?.birthdayPoints?.toString() || '200');
+  const [birthdayMinDays, setBirthdayMinDays] = useState(program?.birthdayMinDays?.toString() || '7');
+  const [redemptionValue, setRedemptionValue] = useState(program?.redemptionValue?.toString() || '5');
+  const [minRedemption, setMinRedemption] = useState(program?.minRedemption?.toString() || '100');
+  const [pointsExpiryMonths, setPointsExpiryMonths] = useState(program?.pointsExpiryMonths?.toString() || '12');
+  const [rounding, setRounding] = useState(program?.rounding || 'nearest');
+  const [excludeDiscounts, setExcludeDiscounts] = useState(program?.excludeDiscounts || false);
+  const [earnOnShipping, setEarnOnShipping] = useState(program?.earnOnShipping || false);
+  const [preventStacking, setPreventStacking] = useState(program?.preventStacking || false);
+  
   const isSubmitting = navigation.state === 'submitting';
   const isSettingsSubmitting = isSubmitting && navigation.formData?.get('_action') !== 'updatePointRules' && navigation.formData?.get('_action') !== 'toggleRule' && navigation.formData?.get('_action') !== 'moveRuleUp' && navigation.formData?.get('_action') !== 'moveRuleDown';
   const isPointRulesSubmitting = isSubmitting && navigation.formData?.get('_action') === 'updatePointRules';
@@ -428,7 +451,8 @@ export default function SettingsPage() {
         min={1}
         step={1}
         autoComplete="off"
-        value={program?.pointsPerCurrency?.toString() || '100'}
+        value={pointsPerCurrency}
+        onChange={(value) => setPointsPerCurrency(value)}
         error={actionData && 'errors' in actionData ? actionData.errors?.pointsPerCurrency : undefined}
         helpText={`Customers will earn this many points for each ${currency} spent`}
       />
@@ -440,7 +464,8 @@ export default function SettingsPage() {
         min={0}
         step={0.01}
         autoComplete="off"
-        value={program?.minSubtotalCents ? (program.minSubtotalCents / 100).toFixed(2) : '10.00'}
+        value={minOrderValue}
+        onChange={(value) => setMinOrderValue(value)}
         error={actionData && 'errors' in actionData ? actionData.errors?.minOrderValue : undefined}
         prefix={currency}
         helpText="Set to 0 to allow points on all orders"
@@ -453,7 +478,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.maxPointsPerOrder?.toString() || ''}
+        value={maxPointsPerOrder}
+        onChange={(value) => setMaxPointsPerOrder(value)}
         helpText="Leave empty for no limit"
       />
 
@@ -464,7 +490,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.dailyEarnCap?.toString() || ''}
+        value={dailyEarnCap}
+        onChange={(value) => setDailyEarnCap(value)}
         helpText="Maximum points a customer can earn per day"
       />
 
@@ -475,7 +502,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.monthlyEarnCap?.toString() || ''}
+        value={monthlyEarnCap}
+        onChange={(value) => setMonthlyEarnCap(value)}
         helpText="Maximum points a customer can earn per month"
       />
 
@@ -490,7 +518,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.reviewBasePoints?.toString() || '50'}
+        value={reviewBasePoints}
+        onChange={(value) => setReviewBasePoints(value)}
         helpText="Points awarded for each verified review"
       />
 
@@ -501,7 +530,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.maxReviewsPerMonth?.toString() || '2'}
+        value={maxReviewsPerMonth}
+        onChange={(value) => setMaxReviewsPerMonth(value)}
         helpText="Maximum number of reviews that can earn points per month"
       />
 
@@ -516,7 +546,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.bronzeSignupBonus?.toString() || '100'}
+        value={bronzeSignupBonus}
+        onChange={(value) => setBronzeSignupBonus(value)}
         helpText="Points awarded when customer signs up (Bronze tier)"
       />
 
@@ -527,7 +558,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.silverUnlockBonus?.toString() || '300'}
+        value={silverUnlockBonus}
+        onChange={(value) => setSilverUnlockBonus(value)}
         helpText="Points awarded when customer reaches Silver tier"
       />
 
@@ -538,7 +570,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.goldUnlockBonus?.toString() || '500'}
+        value={goldUnlockBonus}
+        onChange={(value) => setGoldUnlockBonus(value)}
         helpText="Points awarded when customer reaches Gold tier"
       />
 
@@ -553,7 +586,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.birthdayPoints?.toString() || '200'}
+        value={birthdayPoints}
+        onChange={(value) => setBirthdayPoints(value)}
         helpText="Points awarded on customer's birthday"
       />
 
@@ -564,7 +598,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.birthdayMinDays?.toString() || '7'}
+        value={birthdayMinDays}
+        onChange={(value) => setBirthdayMinDays(value)}
         helpText="Minimum days before birthday to submit birthdate"
       />
 
@@ -579,7 +614,8 @@ export default function SettingsPage() {
         min={1}
         step={1}
         autoComplete="off"
-        value={program?.redemptionValue?.toString() || '5'}
+        value={redemptionValue}
+        onChange={(value) => setRedemptionValue(value)}
         helpText={`Number of points equal to 1 ${currency}`}
       />
 
@@ -590,7 +626,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.minRedemption?.toString() || '100'}
+        value={minRedemption}
+        onChange={(value) => setMinRedemption(value)}
         helpText="Minimum points required for redemption"
       />
 
@@ -599,7 +636,8 @@ export default function SettingsPage() {
           <input
             type="checkbox"
             name="preventStacking"
-            defaultChecked={program?.preventStacking || false}
+            checked={preventStacking}
+        onChange={(e) => setPreventStacking(e.target.checked)}
             style={{ width: '1rem', height: '1rem' }}
           />
           <Text as="span" variant="bodyMd">Prevent stacking with discount codes</Text>
@@ -620,7 +658,8 @@ export default function SettingsPage() {
         min={0}
         step={1}
         autoComplete="off"
-        value={program?.pointsExpiryMonths?.toString() || '12'}
+        value={pointsExpiryMonths}
+        onChange={(value) => setPointsExpiryMonths(value)}
         helpText="Points will expire after this many months of inactivity"
       />
 
@@ -628,8 +667,8 @@ export default function SettingsPage() {
         <Text as="p" variant="bodyMd" fontWeight="medium">Point rounding</Text>
         <select 
           name="rounding"
-          value={program?.rounding || 'nearest'}
-          defaultValue={program?.rounding || 'nearest'}
+          value={rounding}
+        onChange={(e) => setRounding(e.target.value as RoundingMode)}
           style={{
             width: '100%',
             padding: '0.5rem',
@@ -651,7 +690,8 @@ export default function SettingsPage() {
           <input
             type="checkbox"
             name="excludeDiscounts"
-            defaultChecked={program?.excludeDiscounts || false}
+            checked={excludeDiscounts}
+        onChange={(e) => setExcludeDiscounts(e.target.checked)}
             style={{ width: '1rem', height: '1rem' }}
           />
           <Text as="span" variant="bodyMd">Exclude discounts from point calculations</Text>
@@ -666,7 +706,8 @@ export default function SettingsPage() {
           <input
             type="checkbox"
             name="earnOnShipping"
-            defaultChecked={program?.earnOnShipping || false}
+            checked={earnOnShipping}
+        onChange={(e) => setEarnOnShipping(e.target.checked)}
             style={{ width: '1rem', height: '1rem' }}
           />
           <Text as="span" variant="bodyMd">Award points on shipping costs</Text>
@@ -713,7 +754,7 @@ export default function SettingsPage() {
                           type="number"
                           min={0}
                           name={`rule_${rule.type}_points`}
-                          value={rule.points.toString()}
+                          defaultValue={rule.points.toString()}
                           autoComplete="off"
                         />
                       ),
@@ -722,7 +763,7 @@ export default function SettingsPage() {
                           label=""
                           labelHidden
                           name={`rule_${rule.type}_description`}
-                          value={rule.description}
+                          defaultValue={rule.description}
                           autoComplete="off"
                         />
                       ),
